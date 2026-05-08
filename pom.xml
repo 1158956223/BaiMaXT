@@ -11,6 +11,7 @@
     <groupId>com.example</groupId>
     <artifactId>BaiMaXT</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
     <name>BaiMaXT</name>
     <description>BaiMaXT</description>
     <url/>
@@ -20,6 +21,11 @@
     <developers>
         <developer/>
     </developers>
+    <modules>
+        <module>user-service</module>
+        <module>gateway-service</module>
+        <module>auth-service</module>
+    </modules>
     <scm>
         <connection/>
         <developerConnection/>
