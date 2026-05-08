@@ -7,6 +7,7 @@ import com.example.domain.dto.LoginRequest;
 import com.example.domain.dto.UpdateUserRequest;
 import com.example.domain.dto.UserResponse;
 import com.example.domain.po.User;
+import com.example.enums.UserRole;
 import com.example.enums.UserStatus;
 import com.example.exception.BusinessException;
 import com.example.mapper.UserMapper;
@@ -31,15 +32,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public UserResponse create(CreateUserRequest request) {
         if (request == null) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "请求参数不能为空");
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
         }
-        String username = requireText(request.username(), "用户名不能为空");
-        String password = requireText(request.password(), "密码不能为空");
+        String username = requireText(request.username(), "Username must not be blank");
+        String password = requireText(request.password(), "Password must not be blank");
         if (password.length() < 6) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "密码长度不能少于6位");
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Password length must be at least 6");
         }
         if (existsByUsername(username)) {
-            throw new BusinessException(HttpStatus.CONFLICT, "用户名已存在");
+            throw new BusinessException(HttpStatus.CONFLICT, "Username already exists");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -49,6 +50,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setNickname(defaultIfBlank(request.nickname(), username));
         user.setPhone(trimToNull(request.phone()));
         user.setEmail(trimToNull(request.email()));
+        user.setRole(defaultRole(request.role()));
         user.setStatus(UserStatus.ENABLED);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
@@ -59,19 +61,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public UserResponse login(LoginRequest request) {
         if (request == null) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "请求参数不能为空");
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
         }
-        String username = requireText(request.username(), "用户名不能为空");
-        String password = requireText(request.password(), "密码不能为空");
+        String username = requireText(request.username(), "Username must not be blank");
+        String password = requireText(request.password(), "Password must not be blank");
         User user = findByUsername(username);
         if (user == null) {
-            throw new BusinessException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Username or password is incorrect");
         }
         if (user.getStatus() == UserStatus.DISABLED) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "用户已被禁用");
+            throw new BusinessException(HttpStatus.FORBIDDEN, "User is disabled");
         }
         if (!passwordTool.matches(password, user.getPasswordHash())) {
-            throw new BusinessException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Username or password is incorrect");
         }
         return toResponse(user);
     }
@@ -91,7 +93,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public UserResponse update(Long id, UpdateUserRequest request) {
         if (request == null) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "请求参数不能为空");
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
         }
         User user = getUser(id);
         user.setNickname(defaultIfBlank(request.nickname(), user.getNickname()));
@@ -122,11 +124,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     private User getUser(Long id) {
         if (id == null) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "用户ID不能为空");
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "User id must not be null");
         }
         User user = userMapper.selectById(id);
         if (user == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND, "用户不存在");
+            throw new BusinessException(HttpStatus.NOT_FOUND, "User does not exist");
         }
         return user;
     }
@@ -149,10 +151,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 user.getNickname(),
                 user.getPhone(),
                 user.getEmail(),
+                user.getRole(),
                 user.getStatus(),
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );
+    }
+
+    private UserRole defaultRole(UserRole role) {
+        return role == null ? UserRole.STUDENT : role;
     }
 
     private String requireText(String value, String message) {
