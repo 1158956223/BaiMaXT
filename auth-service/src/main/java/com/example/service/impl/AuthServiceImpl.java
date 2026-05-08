@@ -10,6 +10,8 @@ import com.example.domain.dto.UserProfileResponse;
 import com.example.domain.po.AuthAccount;
 import com.example.domain.vo.AuthResponse;
 import com.example.domain.vo.CurrentUserResponse;
+import com.example.enums.AccountRole;
+import com.example.enums.AccountStatus;
 import com.example.exception.BusinessException;
 import com.example.mapper.AuthAccountMapper;
 import com.example.service.AuthService;
@@ -24,10 +26,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class AuthServiceImpl implements AuthService {
 
-    private static final String ROLE_STUDENT = "STUDENT";
-    private static final String ROLE_ADMIN = "ADMIN";
-    private static final String STATUS_ENABLED = "ENABLED";
-    private static final String STATUS_DISABLED = "DISABLED";
     private final AuthAccountMapper authAccountMapper;
     private final UserClient userClient;
     private final PasswordEncoder passwordEncoder;
@@ -63,7 +61,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(HttpStatus.CONFLICT, "Phone already exists");
         }
 
-        String role = defaultRole(request.role());
+        AccountRole role = defaultRole(request.role());
         UserProfileResponse user = createUserProfile(request, username, role);
 
         LocalDateTime now = LocalDateTime.now();
@@ -73,7 +71,7 @@ public class AuthServiceImpl implements AuthService {
         account.setPhone(phone);
         account.setPasswordHash(passwordEncoder.encode(password));
         account.setRole(role);
-        account.setStatus(STATUS_ENABLED);
+        account.setStatus(AccountStatus.ENABLED);
         account.setCreatedAt(now);
         account.setUpdatedAt(now);
         authAccountMapper.insert(account);
@@ -91,7 +89,7 @@ public class AuthServiceImpl implements AuthService {
         if (account == null || !passwordEncoder.matches(password, account.getPasswordHash())) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "Username or password is incorrect");
         }
-        if (STATUS_DISABLED.equals(account.getStatus())) {
+        if (AccountStatus.DISABLED.equals(account.getStatus())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Account is disabled");
         }
         UserProfileResponse user = getUserProfile(account.getUserId());
@@ -110,9 +108,9 @@ public class AuthServiceImpl implements AuthService {
         Long accountId = jwtTool.getLong(payload, "accountId");
         Long userId = jwtTool.getLong(payload, "userId");
         String username = jwtTool.getString(payload, "username");
-        String role = jwtTool.getString(payload, "role");
+        AccountRole role = parseRole(jwtTool.getString(payload, "role"));
         AuthAccount account = authAccountMapper.selectById(accountId);
-        if (account == null || STATUS_DISABLED.equals(account.getStatus())) {
+        if (account == null || AccountStatus.DISABLED.equals(account.getStatus())) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
         }
         if (!account.getUserId().equals(userId)) {
@@ -121,7 +119,7 @@ public class AuthServiceImpl implements AuthService {
         return new CurrentUserResponse(accountId, userId, username, role, getUserProfile(userId));
     }
 
-    private UserProfileResponse createUserProfile(RegisterRequest request, String username, String role) {
+    private UserProfileResponse createUserProfile(RegisterRequest request, String username, AccountRole role) {
         try {
             ApiResponse<UserProfileResponse> response = userClient.createUser(new CreateUserProfileRequest(
                     username,
@@ -193,16 +191,16 @@ public class AuthServiceImpl implements AuthService {
         return header.substring("Bearer ".length()).trim();
     }
 
-    private String defaultRole(String role) {
-        String text = trimToNull(role);
-        if (text == null) {
-            return ROLE_STUDENT;
+    private AccountRole defaultRole(AccountRole role) {
+        return role == null ? AccountRole.STUDENT : role;
+    }
+
+    private AccountRole parseRole(String role) {
+        try {
+            return AccountRole.valueOf(role);
+        } catch (RuntimeException exception) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
         }
-        String normalized = text.toUpperCase();
-        if (!ROLE_STUDENT.equals(normalized) && !ROLE_ADMIN.equals(normalized)) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Role must be STUDENT or ADMIN");
-        }
-        return normalized;
     }
 
     private String requireText(String value, String message) {

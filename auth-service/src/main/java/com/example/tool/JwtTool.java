@@ -2,6 +2,7 @@ package com.example.tool;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.enums.AccountRole;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -32,7 +33,7 @@ public class JwtTool {
         this.expirationSeconds = expirationSeconds;
     }
 
-    public String createToken(Long accountId, Long userId, String username, String role) {
+    public String createToken(Long accountId, Long userId, String username, AccountRole role) {
         try {
             Map<String, Object> header = new LinkedHashMap<>();
             header.put("alg", "HS256");
@@ -43,7 +44,7 @@ public class JwtTool {
             payload.put("accountId", accountId);
             payload.put("userId", userId);
             payload.put("username", username);
-            payload.put("role", role);
+            payload.put("role", role.name());
             payload.put("iat", now.getEpochSecond());
             payload.put("exp", now.plusSeconds(expirationSeconds).getEpochSecond());
 
