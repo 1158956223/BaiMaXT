@@ -3,7 +3,7 @@ package com.example.api;
 public record ApiResponse<T>(int code, String message, T data) {
 
     public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(200, "请求成功", data);
+        return new ApiResponse<>(200, "Success", data);
     }
 
     public static <T> ApiResponse<T> fail(int code, String message) {

@@ -2,7 +2,7 @@ package com.example.controller;
 
 import com.example.api.ApiResponse;
 import com.example.domain.dto.CreateUserRequest;
-import com.example.domain.dto.LoginRequest;
+import com.example.domain.dto.InternalCreateUserRequest;
 import com.example.domain.dto.UpdateUserRequest;
 import com.example.domain.dto.UserResponse;
 import com.example.service.UserService;
@@ -31,9 +31,9 @@ public class UserController {
         return ApiResponse.success(userService.create(request));
     }
 
-    @PostMapping("/login")
-    public ApiResponse<UserResponse> login(@RequestBody LoginRequest request) {
-        return ApiResponse.success(userService.login(request));
+    @PostMapping("/internal")
+    public ApiResponse<UserResponse> createInternal(@RequestBody InternalCreateUserRequest request) {
+        return ApiResponse.success(userService.createInternal(request));
     }
 
     @GetMapping

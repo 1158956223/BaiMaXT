@@ -3,7 +3,7 @@ package com.example.service.imp;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.example.domain.dto.CreateUserRequest;
-import com.example.domain.dto.LoginRequest;
+import com.example.domain.dto.InternalCreateUserRequest;
 import com.example.domain.dto.UpdateUserRequest;
 import com.example.domain.dto.UserResponse;
 import com.example.domain.po.User;
@@ -12,7 +12,6 @@ import com.example.enums.UserStatus;
 import com.example.exception.BusinessException;
 import com.example.mapper.UserMapper;
 import com.example.service.UserService;
-import com.example.tool.PasswordTool;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -22,11 +21,9 @@ import org.springframework.stereotype.Service;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
     private final UserMapper userMapper;
-    private final PasswordTool passwordTool;
 
-    public UserServiceImpl(UserMapper userMapper, PasswordTool passwordTool) {
+    public UserServiceImpl(UserMapper userMapper) {
         this.userMapper = userMapper;
-        this.passwordTool = passwordTool;
     }
 
     @Override
@@ -35,10 +32,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
         }
         String username = requireText(request.username(), "Username must not be blank");
-        String password = requireText(request.password(), "Password must not be blank");
-        if (password.length() < 6) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Password length must be at least 6");
-        }
         if (existsByUsername(username)) {
             throw new BusinessException(HttpStatus.CONFLICT, "Username already exists");
         }
@@ -46,7 +39,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         LocalDateTime now = LocalDateTime.now();
         User user = new User();
         user.setUsername(username);
-        user.setPasswordHash(passwordTool.hash(password));
+        user.setPasswordHash(null);
         user.setNickname(defaultIfBlank(request.nickname(), username));
         user.setPhone(trimToNull(request.phone()));
         user.setEmail(trimToNull(request.email()));
@@ -59,23 +52,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public UserResponse login(LoginRequest request) {
+    public UserResponse createInternal(InternalCreateUserRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
         }
-        String username = requireText(request.username(), "Username must not be blank");
-        String password = requireText(request.password(), "Password must not be blank");
-        User user = findByUsername(username);
-        if (user == null) {
-            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Username or password is incorrect");
-        }
-        if (user.getStatus() == UserStatus.DISABLED) {
-            throw new BusinessException(HttpStatus.FORBIDDEN, "User is disabled");
-        }
-        if (!passwordTool.matches(password, user.getPasswordHash())) {
-            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Username or password is incorrect");
-        }
-        return toResponse(user);
+        return create(new CreateUserRequest(
+                request.username(),
+                request.nickname(),
+                request.phone(),
+                request.email(),
+                request.role()
+        ));
     }
 
     @Override
@@ -131,12 +118,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(HttpStatus.NOT_FOUND, "User does not exist");
         }
         return user;
-    }
-
-    private User findByUsername(String username) {
-        return userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getUsername, username)
-                .last("limit 1"));
     }
 
     private boolean existsByUsername(String username) {

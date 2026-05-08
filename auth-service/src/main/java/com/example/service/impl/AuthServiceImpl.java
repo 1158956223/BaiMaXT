@@ -1,0 +1,227 @@
+package com.example.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.api.ApiResponse;
+import com.example.client.UserClient;
+import com.example.domain.dto.CreateUserProfileRequest;
+import com.example.domain.dto.LoginRequest;
+import com.example.domain.dto.RegisterRequest;
+import com.example.domain.dto.UserProfileResponse;
+import com.example.domain.po.AuthAccount;
+import com.example.domain.vo.AuthResponse;
+import com.example.domain.vo.CurrentUserResponse;
+import com.example.exception.BusinessException;
+import com.example.mapper.AuthAccountMapper;
+import com.example.service.AuthService;
+import com.example.tool.JwtTool;
+import feign.FeignException;
+import java.time.LocalDateTime;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+@Service
+public class AuthServiceImpl implements AuthService {
+
+    private static final String ROLE_STUDENT = "STUDENT";
+    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String STATUS_ENABLED = "ENABLED";
+    private static final String STATUS_DISABLED = "DISABLED";
+    private final AuthAccountMapper authAccountMapper;
+    private final UserClient userClient;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtTool jwtTool;
+
+    public AuthServiceImpl(
+            AuthAccountMapper authAccountMapper,
+            UserClient userClient,
+            PasswordEncoder passwordEncoder,
+            JwtTool jwtTool
+    ) {
+        this.authAccountMapper = authAccountMapper;
+        this.userClient = userClient;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtTool = jwtTool;
+    }
+
+    @Override
+    public AuthResponse register(RegisterRequest request) {
+        if (request == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
+        }
+        String username = requireText(request.username(), "Username must not be blank");
+        String password = requireText(request.password(), "Password must not be blank");
+        if (password.length() < 6) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Password length must be at least 6");
+        }
+        if (existsByUsername(username)) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Username already exists");
+        }
+        String phone = trimToNull(request.phone());
+        if (phone != null && existsByPhone(phone)) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Phone already exists");
+        }
+
+        String role = defaultRole(request.role());
+        UserProfileResponse user = createUserProfile(request, username, role);
+
+        LocalDateTime now = LocalDateTime.now();
+        AuthAccount account = new AuthAccount();
+        account.setUserId(user.id());
+        account.setUsername(username);
+        account.setPhone(phone);
+        account.setPasswordHash(passwordEncoder.encode(password));
+        account.setRole(role);
+        account.setStatus(STATUS_ENABLED);
+        account.setCreatedAt(now);
+        account.setUpdatedAt(now);
+        authAccountMapper.insert(account);
+        return toAuthResponse(account, user);
+    }
+
+    @Override
+    public AuthResponse login(LoginRequest request) {
+        if (request == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
+        }
+        String username = requireText(request.username(), "Username must not be blank");
+        String password = requireText(request.password(), "Password must not be blank");
+        AuthAccount account = findByUsername(username);
+        if (account == null || !passwordEncoder.matches(password, account.getPasswordHash())) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Username or password is incorrect");
+        }
+        if (STATUS_DISABLED.equals(account.getStatus())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Account is disabled");
+        }
+        UserProfileResponse user = getUserProfile(account.getUserId());
+        return toAuthResponse(account, user);
+    }
+
+    @Override
+    public CurrentUserResponse me(String authorizationHeader) {
+        String token = extractToken(authorizationHeader);
+        Map<String, Object> payload;
+        try {
+            payload = jwtTool.parseToken(token);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
+        }
+        Long accountId = jwtTool.getLong(payload, "accountId");
+        Long userId = jwtTool.getLong(payload, "userId");
+        String username = jwtTool.getString(payload, "username");
+        String role = jwtTool.getString(payload, "role");
+        AuthAccount account = authAccountMapper.selectById(accountId);
+        if (account == null || STATUS_DISABLED.equals(account.getStatus())) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
+        }
+        if (!account.getUserId().equals(userId)) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
+        }
+        return new CurrentUserResponse(accountId, userId, username, role, getUserProfile(userId));
+    }
+
+    private UserProfileResponse createUserProfile(RegisterRequest request, String username, String role) {
+        try {
+            ApiResponse<UserProfileResponse> response = userClient.createUser(new CreateUserProfileRequest(
+                    username,
+                    defaultIfBlank(request.nickname(), username),
+                    trimToNull(request.phone()),
+                    trimToNull(request.email()),
+                    role
+            ));
+            return unwrapUserResponse(response, "Failed to create user profile");
+        } catch (FeignException.Conflict exception) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Username already exists");
+        }
+    }
+
+    private UserProfileResponse getUserProfile(Long userId) {
+        try {
+            return unwrapUserResponse(userClient.getUser(userId), "Failed to get user profile");
+        } catch (FeignException.NotFound exception) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "User profile does not exist");
+        }
+    }
+
+    private UserProfileResponse unwrapUserResponse(ApiResponse<UserProfileResponse> response, String message) {
+        if (response == null || response.code() != 200 || response.data() == null) {
+            String detail = response == null ? message : response.message();
+            throw new BusinessException(HttpStatus.BAD_GATEWAY, detail);
+        }
+        return response.data();
+    }
+
+    private AuthResponse toAuthResponse(AuthAccount account, UserProfileResponse user) {
+        String token = jwtTool.createToken(
+                account.getId(),
+                account.getUserId(),
+                account.getUsername(),
+                account.getRole()
+        );
+        return new AuthResponse(
+                token,
+                account.getId(),
+                account.getUserId(),
+                account.getUsername(),
+                account.getRole(),
+                user
+        );
+    }
+
+    private boolean existsByUsername(String username) {
+        return authAccountMapper.selectCount(new LambdaQueryWrapper<AuthAccount>()
+                .eq(AuthAccount::getUsername, username)) > 0;
+    }
+
+    private boolean existsByPhone(String phone) {
+        return authAccountMapper.selectCount(new LambdaQueryWrapper<AuthAccount>()
+                .eq(AuthAccount::getPhone, phone)) > 0;
+    }
+
+    private AuthAccount findByUsername(String username) {
+        return authAccountMapper.selectOne(new LambdaQueryWrapper<AuthAccount>()
+                .eq(AuthAccount::getUsername, username)
+                .last("limit 1"));
+    }
+
+    private String extractToken(String authorizationHeader) {
+        String header = requireText(authorizationHeader, "Authorization header must not be blank");
+        if (!header.startsWith("Bearer ")) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid authorization header");
+        }
+        return header.substring("Bearer ".length()).trim();
+    }
+
+    private String defaultRole(String role) {
+        String text = trimToNull(role);
+        if (text == null) {
+            return ROLE_STUDENT;
+        }
+        String normalized = text.toUpperCase();
+        if (!ROLE_STUDENT.equals(normalized) && !ROLE_ADMIN.equals(normalized)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Role must be STUDENT or ADMIN");
+        }
+        return normalized;
+    }
+
+    private String requireText(String value, String message) {
+        String text = trimToNull(value);
+        if (text == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, message);
+        }
+        return text;
+    }
+
+    private String defaultIfBlank(String value, String fallback) {
+        String text = trimToNull(value);
+        return text == null ? fallback : text;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
+    }
+}

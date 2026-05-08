@@ -1,6 +1,7 @@
 package com.example.exception;
 
 import com.example.api.ApiResponse;
+import feign.FeignException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -12,6 +13,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
         return ResponseEntity.status(exception.getStatus())
                 .body(ApiResponse.fail(exception.getStatus().value(), exception.getMessage()));
+    }
+
+    @ExceptionHandler(FeignException.class)
+    public ResponseEntity<ApiResponse<Void>> handleFeignException(Exception exception) {
+        return ResponseEntity.internalServerError()
+                .body(ApiResponse.fail(500, "User service is temporarily unavailable"));
     }
 
     @ExceptionHandler(Exception.class)
