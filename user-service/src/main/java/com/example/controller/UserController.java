@@ -2,9 +2,10 @@ package com.example.controller;
 
 import com.example.api.ApiResponse;
 import com.example.domain.dto.CreateUserRequest;
-import com.example.domain.dto.InternalCreateUserRequest;
 import com.example.domain.dto.UpdateUserRequest;
 import com.example.domain.dto.UserResponse;
+import com.example.dto.user.CreateUserProfileRequest;
+import com.example.dto.user.UserProfileResponse;
 import com.example.service.UserService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,8 +33,13 @@ public class UserController {
     }
 
     @PostMapping("/internal")
-    public ApiResponse<UserResponse> createInternal(@RequestBody InternalCreateUserRequest request) {
+    public ApiResponse<UserProfileResponse> createInternal(@RequestBody CreateUserProfileRequest request) {
         return ApiResponse.success(userService.createInternal(request));
+    }
+
+    @GetMapping("/internal/{id}")
+    public ApiResponse<UserProfileResponse> getInternal(@PathVariable Long id) {
+        return ApiResponse.success(userService.getProfile(id));
     }
 
     @GetMapping

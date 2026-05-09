@@ -3,10 +3,11 @@ package com.example.service.imp;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.example.domain.dto.CreateUserRequest;
-import com.example.domain.dto.InternalCreateUserRequest;
 import com.example.domain.dto.UpdateUserRequest;
 import com.example.domain.dto.UserResponse;
 import com.example.domain.po.User;
+import com.example.dto.user.CreateUserProfileRequest;
+import com.example.dto.user.UserProfileResponse;
 import com.example.enums.UserRole;
 import com.example.enums.UserStatus;
 import com.example.exception.BusinessException;
@@ -52,17 +53,22 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public UserResponse createInternal(InternalCreateUserRequest request) {
+    public UserProfileResponse createInternal(CreateUserProfileRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
         }
-        return create(new CreateUserRequest(
+        return toProfileResponse(create(new CreateUserRequest(
                 request.username(),
                 request.nickname(),
                 request.phone(),
                 request.email(),
                 request.role()
-        ));
+        )));
+    }
+
+    @Override
+    public UserProfileResponse getProfile(Long id) {
+        return toProfileResponse(get(id));
     }
 
     @Override
@@ -136,6 +142,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 user.getStatus(),
                 user.getCreatedAt(),
                 user.getUpdatedAt()
+        );
+    }
+
+    private UserProfileResponse toProfileResponse(UserResponse user) {
+        return new UserProfileResponse(
+                user.id(),
+                user.username(),
+                user.nickname(),
+                user.phone(),
+                user.email(),
+                user.role(),
+                user.status(),
+                user.createdAt(),
+                user.updatedAt()
         );
     }
 

@@ -1,8 +1,8 @@
-package com.example.domain.dto;
+package com.example.dto.user;
 
 import com.example.enums.UserRole;
 
-public record InternalCreateUserRequest(
+public record CreateUserProfileRequest(
         String username,
         String nickname,
         String phone,

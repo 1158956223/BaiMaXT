@@ -7,8 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.domain.dto.CreateUserRequest;
-import com.example.domain.dto.InternalCreateUserRequest;
 import com.example.domain.po.User;
+import com.example.dto.user.CreateUserProfileRequest;
 import com.example.enums.UserRole;
 import com.example.enums.UserStatus;
 import com.example.exception.BusinessException;
@@ -87,7 +87,7 @@ class UserServiceImplTest {
 
     @Test
     void createInternalCreatesUserProfile() {
-        var created = userService.createInternal(new InternalCreateUserRequest(
+        var created = userService.createInternal(new CreateUserProfileRequest(
                 "alice",
                 "Alice",
                 "13800000000",

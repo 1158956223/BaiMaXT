@@ -3,13 +3,13 @@ package com.example.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.api.ApiResponse;
 import com.example.client.UserClient;
-import com.example.domain.dto.CreateUserProfileRequest;
 import com.example.domain.dto.LoginRequest;
 import com.example.domain.dto.RegisterRequest;
-import com.example.domain.dto.UserProfileResponse;
 import com.example.domain.po.AuthAccount;
 import com.example.domain.vo.AuthResponse;
 import com.example.domain.vo.CurrentUserResponse;
+import com.example.dto.user.CreateUserProfileRequest;
+import com.example.dto.user.UserProfileResponse;
 import com.example.enums.UserRole;
 import com.example.enums.UserStatus;
 import com.example.exception.BusinessException;
@@ -121,7 +121,7 @@ public class AuthServiceImpl implements AuthService {
 
     private UserProfileResponse createUserProfile(RegisterRequest request, String username, UserRole role) {
         try {
-            ApiResponse<UserProfileResponse> response = userClient.createUser(new CreateUserProfileRequest(
+            ApiResponse<UserProfileResponse> response = userClient.createInternal(new CreateUserProfileRequest(
                     username,
                     defaultIfBlank(request.nickname(), username),
                     trimToNull(request.phone()),
@@ -136,7 +136,7 @@ public class AuthServiceImpl implements AuthService {
 
     private UserProfileResponse getUserProfile(Long userId) {
         try {
-            return unwrapUserResponse(userClient.getUser(userId), "Failed to get user profile");
+            return unwrapUserResponse(userClient.getInternal(userId), "Failed to get user profile");
         } catch (FeignException.NotFound exception) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "User profile does not exist");
         }
