@@ -1,7 +1,7 @@
 package com.example.domain.dto;
 
-import com.example.enums.AccountRole;
-import com.example.enums.AccountStatus;
+import com.example.enums.UserRole;
+import com.example.enums.UserStatus;
 
 import java.time.LocalDateTime;
 
@@ -11,8 +11,8 @@ public record UserProfileResponse(
         String nickname,
         String phone,
         String email,
-        AccountRole role,
-        AccountStatus status,
+        UserRole role,
+        UserStatus status,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

@@ -10,8 +10,8 @@ import com.example.domain.dto.UserProfileResponse;
 import com.example.domain.po.AuthAccount;
 import com.example.domain.vo.AuthResponse;
 import com.example.domain.vo.CurrentUserResponse;
-import com.example.enums.AccountRole;
-import com.example.enums.AccountStatus;
+import com.example.enums.UserRole;
+import com.example.enums.UserStatus;
 import com.example.exception.BusinessException;
 import com.example.mapper.AuthAccountMapper;
 import com.example.service.AuthService;
@@ -61,7 +61,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(HttpStatus.CONFLICT, "Phone already exists");
         }
 
-        AccountRole role = defaultRole(request.role());
+        UserRole role = defaultRole(request.role());
         UserProfileResponse user = createUserProfile(request, username, role);
 
         LocalDateTime now = LocalDateTime.now();
@@ -71,7 +71,7 @@ public class AuthServiceImpl implements AuthService {
         account.setPhone(phone);
         account.setPasswordHash(passwordEncoder.encode(password));
         account.setRole(role);
-        account.setStatus(AccountStatus.ENABLED);
+        account.setStatus(UserStatus.ENABLED);
         account.setCreatedAt(now);
         account.setUpdatedAt(now);
         authAccountMapper.insert(account);
@@ -89,7 +89,7 @@ public class AuthServiceImpl implements AuthService {
         if (account == null || !passwordEncoder.matches(password, account.getPasswordHash())) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "Username or password is incorrect");
         }
-        if (AccountStatus.DISABLED.equals(account.getStatus())) {
+        if (UserStatus.DISABLED.equals(account.getStatus())) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Account is disabled");
         }
         UserProfileResponse user = getUserProfile(account.getUserId());
@@ -108,9 +108,9 @@ public class AuthServiceImpl implements AuthService {
         Long accountId = jwtTool.getLong(payload, "accountId");
         Long userId = jwtTool.getLong(payload, "userId");
         String username = jwtTool.getString(payload, "username");
-        AccountRole role = parseRole(jwtTool.getString(payload, "role"));
+        UserRole role = parseRole(jwtTool.getString(payload, "role"));
         AuthAccount account = authAccountMapper.selectById(accountId);
-        if (account == null || AccountStatus.DISABLED.equals(account.getStatus())) {
+        if (account == null || UserStatus.DISABLED.equals(account.getStatus())) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
         }
         if (!account.getUserId().equals(userId)) {
@@ -119,7 +119,7 @@ public class AuthServiceImpl implements AuthService {
         return new CurrentUserResponse(accountId, userId, username, role, getUserProfile(userId));
     }
 
-    private UserProfileResponse createUserProfile(RegisterRequest request, String username, AccountRole role) {
+    private UserProfileResponse createUserProfile(RegisterRequest request, String username, UserRole role) {
         try {
             ApiResponse<UserProfileResponse> response = userClient.createUser(new CreateUserProfileRequest(
                     username,
@@ -191,13 +191,13 @@ public class AuthServiceImpl implements AuthService {
         return header.substring("Bearer ".length()).trim();
     }
 
-    private AccountRole defaultRole(AccountRole role) {
-        return role == null ? AccountRole.STUDENT : role;
+    private UserRole defaultRole(UserRole role) {
+        return role == null ? UserRole.STUDENT : role;
     }
 
-    private AccountRole parseRole(String role) {
+    private UserRole parseRole(String role) {
         try {
-            return AccountRole.valueOf(role);
+            return UserRole.valueOf(role);
         } catch (RuntimeException exception) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
         }

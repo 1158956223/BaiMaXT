@@ -6,8 +6,8 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 
-import com.example.enums.AccountRole;
-import com.example.enums.AccountStatus;
+import com.example.enums.UserRole;
+import com.example.enums.UserStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -34,10 +34,10 @@ public class AuthAccount {
     private String passwordHash;
 
     @TableField("role")
-    private AccountRole role;
+    private UserRole role;
 
     @TableField("status")
-    private AccountStatus status;
+    private UserStatus status;
 
     @TableField("created_at")
     private LocalDateTime createdAt;
