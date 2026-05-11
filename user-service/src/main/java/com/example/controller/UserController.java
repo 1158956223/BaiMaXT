@@ -3,7 +3,7 @@ package com.example.controller;
 import com.example.api.ApiResponse;
 import com.example.domain.dto.CreateUserRequest;
 import com.example.domain.dto.UpdateUserRequest;
-import com.example.domain.dto.UserResponse;
+import com.example.domain.vo.UserResponse;
 import com.example.dto.user.CreateUserProfileRequest;
 import com.example.dto.user.UserProfileResponse;
 import com.example.service.UserService;

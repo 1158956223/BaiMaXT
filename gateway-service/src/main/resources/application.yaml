@@ -22,6 +22,18 @@ spring:
               uri: lb://user-service
               predicates:
                 - Path=/api/users/**
+            - id: course-service-courses
+              uri: lb://course-service
+              predicates:
+                - Path=/api/courses/**
+            - id: course-service-teachers
+              uri: lb://course-service
+              predicates:
+                - Path=/api/teachers/**
+            - id: course-service-categories
+              uri: lb://course-service
+              predicates:
+                - Path=/api/course-categories/**
           globalcors:
             cors-configurations:
               '[/**]':

@@ -1,4 +1,4 @@
-package com.example.domain.dto;
+package com.example.domain.vo;
 
 import com.example.enums.UserRole;
 import com.example.enums.UserStatus;
