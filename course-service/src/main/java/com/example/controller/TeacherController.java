@@ -3,6 +3,8 @@ package com.example.controller;
 import com.example.api.ApiResponse;
 import com.example.domain.dto.TeacherRequest;
 import com.example.domain.vo.TeacherResponse;
+import com.example.dto.teacher.CreateTeacherProfileRequest;
+import com.example.dto.teacher.TeacherProfileResponse;
 import com.example.service.TeacherService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,6 +44,11 @@ public class TeacherController {
     @PostMapping("/admin")
     public ApiResponse<TeacherResponse> create(@RequestBody TeacherRequest request) {
         return ApiResponse.success(teacherService.create(request));
+    }
+
+    @PostMapping("/internal")
+    public ApiResponse<TeacherProfileResponse> createInternal(@RequestBody CreateTeacherProfileRequest request) {
+        return ApiResponse.success(teacherService.createInternal(request));
     }
 
     @PutMapping("/admin/{id}")

@@ -1,9 +1,8 @@
-package com.example.domain.vo;
+package com.example.dto.teacher;
 
-import com.example.domain.enums.EnabledStatus;
 import java.time.LocalDateTime;
 
-public record TeacherResponse(
+public record TeacherProfileResponse(
         Long id,
         Long userId,
         String name,
@@ -11,7 +10,7 @@ public record TeacherResponse(
         String bio,
         String specialties,
         Integer yearsExperience,
-        EnabledStatus status,
+        Integer status,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

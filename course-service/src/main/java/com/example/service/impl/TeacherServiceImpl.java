@@ -6,6 +6,8 @@ import com.example.domain.dto.TeacherRequest;
 import com.example.domain.vo.TeacherResponse;
 import com.example.domain.enums.EnabledStatus;
 import com.example.domain.po.Teacher;
+import com.example.dto.teacher.CreateTeacherProfileRequest;
+import com.example.dto.teacher.TeacherProfileResponse;
 import com.example.exception.BusinessException;
 import com.example.mapper.TeacherMapper;
 import com.example.service.TeacherService;
@@ -49,8 +51,8 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
         }
         LocalDateTime now = LocalDateTime.now();
         Teacher teacher = new Teacher();
+        teacher.setUserId(null);
         teacher.setName(requireText(request.name(), "Teacher name must not be blank"));
-        teacher.setAvatarUrl(trimToNull(request.avatarUrl()));
         teacher.setTitle(trimToNull(request.title()));
         teacher.setBio(trimToNull(request.bio()));
         teacher.setSpecialties(trimToNull(request.specialties()));
@@ -63,13 +65,43 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     }
 
     @Override
+    public TeacherProfileResponse createInternal(CreateTeacherProfileRequest request) {
+        if (request == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
+        }
+        Long userId = request.userId();
+        if (userId == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "User id must not be null");
+        }
+        Teacher existing = teacherMapper.selectOne(new LambdaQueryWrapper<Teacher>()
+                .eq(Teacher::getUserId, userId)
+                .last("limit 1"));
+        if (existing != null) {
+            return toProfileResponse(existing);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        Teacher teacher = new Teacher();
+        teacher.setUserId(userId);
+        teacher.setName(requireText(request.name(), "Teacher name must not be blank"));
+        teacher.setTitle(trimToNull(request.title()));
+        teacher.setBio(trimToNull(request.bio()));
+        teacher.setSpecialties(trimToNull(request.specialties()));
+        teacher.setYearsExperience(defaultYears(request.yearsExperience()));
+        teacher.setStatus(EnabledStatus.ENABLED);
+        teacher.setCreatedAt(now);
+        teacher.setUpdatedAt(now);
+        teacherMapper.insert(teacher);
+        return toProfileResponse(teacher);
+    }
+
+    @Override
     public TeacherResponse update(Long id, TeacherRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
         }
         Teacher teacher = getTeacher(id);
         teacher.setName(requireText(request.name(), "Teacher name must not be blank"));
-        teacher.setAvatarUrl(trimToNull(request.avatarUrl()));
         teacher.setTitle(trimToNull(request.title()));
         teacher.setBio(trimToNull(request.bio()));
         teacher.setSpecialties(trimToNull(request.specialties()));
@@ -115,13 +147,28 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     private TeacherResponse toResponse(Teacher teacher) {
         return new TeacherResponse(
                 teacher.getId(),
+                teacher.getUserId(),
                 teacher.getName(),
-                teacher.getAvatarUrl(),
                 teacher.getTitle(),
                 teacher.getBio(),
                 teacher.getSpecialties(),
                 teacher.getYearsExperience(),
                 teacher.getStatus(),
+                teacher.getCreatedAt(),
+                teacher.getUpdatedAt()
+        );
+    }
+
+    private TeacherProfileResponse toProfileResponse(Teacher teacher) {
+        return new TeacherProfileResponse(
+                teacher.getId(),
+                teacher.getUserId(),
+                teacher.getName(),
+                teacher.getTitle(),
+                teacher.getBio(),
+                teacher.getSpecialties(),
+                teacher.getYearsExperience(),
+                teacher.getStatus() == null ? null : teacher.getStatus().getCode(),
                 teacher.getCreatedAt(),
                 teacher.getUpdatedAt()
         );

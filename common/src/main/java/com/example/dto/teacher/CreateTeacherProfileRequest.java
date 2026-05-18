@@ -1,6 +1,7 @@
-package com.example.domain.dto;
+package com.example.dto.teacher;
 
-public record TeacherRequest(
+public record CreateTeacherProfileRequest(
+        Long userId,
         String name,
         String title,
         String bio,

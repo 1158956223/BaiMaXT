@@ -8,6 +8,10 @@ public record RegisterRequest(
         String nickname,
         String phone,
         String email,
-        UserRole role
+        UserRole role,
+        String teacherTitle,
+        String teacherBio,
+        String teacherSpecialties,
+        Integer teacherYearsExperience
 ) {
 }

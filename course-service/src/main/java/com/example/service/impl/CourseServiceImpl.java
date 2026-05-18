@@ -244,7 +244,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         if (teacher == null) {
             return null;
         }
-        return new TeacherSummaryResponse(teacher.getId(), teacher.getName(), teacher.getAvatarUrl(), teacher.getTitle());
+        return new TeacherSummaryResponse(teacher.getId(), teacher.getName(), teacher.getTitle());
     }
 
     private TeacherResponse toTeacherResponse(Teacher teacher) {
@@ -253,8 +253,8 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         }
         return new TeacherResponse(
                 teacher.getId(),
+                teacher.getUserId(),
                 teacher.getName(),
-                teacher.getAvatarUrl(),
                 teacher.getTitle(),
                 teacher.getBio(),
                 teacher.getSpecialties(),

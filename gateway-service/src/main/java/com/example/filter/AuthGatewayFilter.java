@@ -35,7 +35,7 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
         if (HttpMethod.OPTIONS.equals(request.getMethod()) || isPublicPath(request)) {
             return chain.filter(exchange);
         }
-        if (path.startsWith("/api/users/internal/") || path.equals("/api/users/internal")) {
+        if (isInternalPath(path)) {
             return responseWriter.write(exchange, HttpStatus.FORBIDDEN, "Forbidden");
         }
 
@@ -74,6 +74,13 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
         HttpMethod method = request.getMethod();
         return HttpMethod.POST.equals(method)
                 && ("/api/auth/login".equals(path) || "/api/auth/register".equals(path));
+    }
+
+    private boolean isInternalPath(String path) {
+        return path.startsWith("/api/users/internal/")
+                || path.equals("/api/users/internal")
+                || path.startsWith("/api/teachers/internal/")
+                || path.equals("/api/teachers/internal");
     }
 
     private String extractToken(ServerHttpRequest request) {

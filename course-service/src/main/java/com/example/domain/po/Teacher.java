@@ -18,23 +18,23 @@ public class Teacher {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
+    @TableField("user_id")
+    private Long userId;
+
     @TableField("name")
     private String name;
 
-    @TableField("avatar_url")
-    private String avatarUrl; // 头像地址
-
     @TableField("title")
-    private String title; // 头衔
+    private String title;
 
     @TableField("bio")
-    private String bio; // 简介
+    private String bio;
 
     @TableField("specialties")
-    private String specialties; // 擅长领域
+    private String specialties;
 
     @TableField("years_experience")
-    private Integer yearsExperience; // 教龄
+    private Integer yearsExperience;
 
     @TableField("status")
     private EnabledStatus status;

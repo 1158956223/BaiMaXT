@@ -2,12 +2,15 @@ package com.example.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.api.ApiResponse;
+import com.example.client.TeacherClient;
 import com.example.client.UserClient;
 import com.example.domain.dto.LoginRequest;
 import com.example.domain.dto.RegisterRequest;
 import com.example.domain.po.AuthAccount;
 import com.example.domain.vo.AuthResponse;
 import com.example.domain.vo.CurrentUserResponse;
+import com.example.dto.teacher.CreateTeacherProfileRequest;
+import com.example.dto.teacher.TeacherProfileResponse;
 import com.example.dto.user.CreateUserProfileRequest;
 import com.example.dto.user.UserProfileResponse;
 import com.example.enums.UserRole;
@@ -28,17 +31,20 @@ public class AuthServiceImpl implements AuthService {
 
     private final AuthAccountMapper authAccountMapper;
     private final UserClient userClient;
+    private final TeacherClient teacherClient;
     private final PasswordEncoder passwordEncoder;
     private final JwtTool jwtTool;
 
     public AuthServiceImpl(
             AuthAccountMapper authAccountMapper,
             UserClient userClient,
+            TeacherClient teacherClient,
             PasswordEncoder passwordEncoder,
             JwtTool jwtTool
     ) {
         this.authAccountMapper = authAccountMapper;
         this.userClient = userClient;
+        this.teacherClient = teacherClient;
         this.passwordEncoder = passwordEncoder;
         this.jwtTool = jwtTool;
     }
@@ -63,6 +69,7 @@ public class AuthServiceImpl implements AuthService {
 
         UserRole role = defaultRole(request.role());
         UserProfileResponse user = createUserProfile(request, username, role);
+        createTeacherProfileIfNeeded(role, user, request);
 
         LocalDateTime now = LocalDateTime.now();
         AuthAccount account = new AuthAccount();
@@ -134,6 +141,26 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    private void createTeacherProfileIfNeeded(UserRole role, UserProfileResponse user, RegisterRequest request) {
+        if (!UserRole.TEACHER.equals(role)) {
+            return;
+        }
+        String specialties = requireText(request.teacherSpecialties(), "Teacher specialties must not be blank");
+        try {
+            ApiResponse<TeacherProfileResponse> response = teacherClient.createInternal(new CreateTeacherProfileRequest(
+                    user.id(),
+                    defaultIfBlank(user.nickname(), user.username()),
+                    trimToNull(request.teacherTitle()),
+                    trimToNull(request.teacherBio()),
+                    specialties,
+                    request.teacherYearsExperience()
+            ));
+            unwrapTeacherResponse(response, "Failed to create teacher profile");
+        } catch (FeignException exception) {
+            throw new BusinessException(HttpStatus.BAD_GATEWAY, "Failed to create teacher profile");
+        }
+    }
+
     private UserProfileResponse getUserProfile(Long userId) {
         try {
             return unwrapUserResponse(userClient.getInternal(userId), "Failed to get user profile");
@@ -143,6 +170,14 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private UserProfileResponse unwrapUserResponse(ApiResponse<UserProfileResponse> response, String message) {
+        if (response == null || response.code() != 200 || response.data() == null) {
+            String detail = response == null ? message : response.message();
+            throw new BusinessException(HttpStatus.BAD_GATEWAY, detail);
+        }
+        return response.data();
+    }
+
+    private TeacherProfileResponse unwrapTeacherResponse(ApiResponse<TeacherProfileResponse> response, String message) {
         if (response == null || response.code() != 200 || response.data() == null) {
             String detail = response == null ? message : response.message();
             throw new BusinessException(HttpStatus.BAD_GATEWAY, detail);
