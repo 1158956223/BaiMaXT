@@ -76,7 +76,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setCourseId(course.id());
         order.setCourseTitle(course.title());
         order.setCourseSubtitle(course.subtitle());
-        order.setCourseCoverUrl(course.coverUrl());
         order.setTeacherId(teacher == null ? null : teacher.id());
         order.setTeacherName(teacher == null ? null : teacher.name());
         order.setOriginalAmount(originalAmount);
@@ -287,7 +286,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 order.getCourseId(),
                 order.getCourseTitle(),
                 order.getCourseSubtitle(),
-                order.getCourseCoverUrl(),
                 order.getTeacherId(),
                 order.getTeacherName(),
                 order.getOriginalAmount(),

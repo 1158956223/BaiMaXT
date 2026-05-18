@@ -13,7 +13,6 @@ public record OrderResponse(
         Long courseId,
         String courseTitle,
         String courseSubtitle,
-        String courseCoverUrl,
         Long teacherId,
         String teacherName,
         BigDecimal originalAmount,

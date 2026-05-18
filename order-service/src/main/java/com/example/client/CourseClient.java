@@ -20,7 +20,6 @@ public interface CourseClient {
             Long id,
             String title,
             String subtitle,
-            String coverUrl,
             BigDecimal price,
             BigDecimal originalPrice,
             OrderCourseStatus status,

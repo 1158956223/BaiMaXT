@@ -36,9 +36,6 @@ public class Order {
     @TableField("course_subtitle")
     private String courseSubtitle;
 
-    @TableField("course_cover_url")
-    private String courseCoverUrl;
-
     @TableField("teacher_id")
     private Long teacherId;
 
