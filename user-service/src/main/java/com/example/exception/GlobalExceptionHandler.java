@@ -16,6 +16,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception exception) {
+        System.out.println(exception.getMessage());
         return ResponseEntity.internalServerError()
                 .body(ApiResponse.fail(500, "Internal server error(user-service)"));
     }

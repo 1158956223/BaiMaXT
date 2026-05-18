@@ -17,6 +17,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(FeignException.class)
     public ResponseEntity<ApiResponse<Void>> handleFeignException(Exception exception) {
+        System.out.println(exception.getMessage());
         return ResponseEntity.internalServerError()
                 .body(ApiResponse.fail(500, "User service is temporarily unavailable"));
     }
