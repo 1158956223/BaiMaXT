@@ -28,6 +28,7 @@
         <module>auth-service</module>
         <module>course-service</module>
         <module>order-service</module>
+        <module>pay-service</module>
     </modules>
     <scm>
         <connection/>

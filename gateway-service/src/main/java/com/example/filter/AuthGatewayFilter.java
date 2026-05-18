@@ -80,7 +80,11 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
         return path.startsWith("/api/users/internal/")
                 || path.equals("/api/users/internal")
                 || path.startsWith("/api/teachers/internal/")
-                || path.equals("/api/teachers/internal");
+                || path.equals("/api/teachers/internal")
+                || path.startsWith("/api/orders/internal/")
+                || path.equals("/api/orders/internal")
+                || path.startsWith("/api/payments/internal/")
+                || path.equals("/api/payments/internal");
     }
 
     private String extractToken(ServerHttpRequest request) {

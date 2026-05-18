@@ -7,6 +7,7 @@ import com.example.client.CourseClient;
 import com.example.client.CourseClient.CourseDetailClientResponse;
 import com.example.client.CourseClient.TeacherClientResponse;
 import com.example.client.UserClient;
+import com.example.domain.dto.ConfirmPaymentRequest;
 import com.example.domain.dto.CreateOrderRequest;
 import com.example.domain.enums.OrderCourseStatus;
 import com.example.domain.enums.OrderOperateType;
@@ -16,6 +17,8 @@ import com.example.domain.enums.PayType;
 import com.example.domain.po.Order;
 import com.example.domain.po.OrderStatusLog;
 import com.example.domain.vo.OrderDetailResponse;
+import com.example.domain.vo.OrderPayableResponse;
+import com.example.domain.vo.OrderPaymentConfirmResponse;
 import com.example.domain.vo.OrderResponse;
 import com.example.domain.vo.OrderStatusLogResponse;
 import com.example.dto.user.UserProfileResponse;
@@ -24,6 +27,9 @@ import com.example.enums.UserStatus;
 import com.example.exception.BusinessException;
 import com.example.mapper.OrderMapper;
 import com.example.mapper.OrderStatusLogMapper;
+import com.example.mq.MqConstants;
+import com.example.mq.OrderTimeoutMessage;
+import com.example.mq.PaymentSuccessMessage;
 import com.example.service.OrderService;
 import feign.FeignException;
 import java.math.BigDecimal;
@@ -32,6 +38,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,15 +52,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final OrderStatusLogMapper statusLogMapper;
     private final UserClient userClient;
     private final CourseClient courseClient;
+    private final RabbitTemplate rabbitTemplate;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             OrderStatusLogMapper statusLogMapper,
                             UserClient userClient,
-                            CourseClient courseClient) {
+                            CourseClient courseClient,
+                            RabbitTemplate rabbitTemplate) {
         this.orderMapper = orderMapper;
         this.statusLogMapper = statusLogMapper;
         this.userClient = userClient;
         this.courseClient = courseClient;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     @Override
@@ -91,6 +101,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         orderMapper.insert(order);
         appendLog(order, null, order.getOrderStatus(), null, order.getPayStatus(),
                 OrderOperateType.CREATE_ORDER, user.id(), user.role(), "Create order");
+        rabbitTemplate.convertAndSend(
+                MqConstants.ORDER_EXCHANGE,
+                MqConstants.ORDER_TIMEOUT_DELAY_ROUTING_KEY,
+                new OrderTimeoutMessage(order.getOrderNo(), order.getUserId(), order.getExpireTime())
+        );
         return toResponse(order);
     }
 
@@ -185,6 +200,122 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 .toList();
     }
 
+    @Override
+    public OrderPayableResponse getPayable(String orderNo, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "User id must not be null");
+        }
+        Order order = getOrderByOrderNo(orderNo);
+        requireOwner(order, userId);
+        if (order.getOrderStatus() != OrderStatus.CREATED || order.getPayStatus() != PayStatus.UNPAID) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Only unpaid created orders can be paid");
+        }
+        if (order.getExpireTime() != null && !order.getExpireTime().isAfter(LocalDateTime.now())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Order is expired");
+        }
+        return new OrderPayableResponse(
+                order.getOrderNo(),
+                order.getUserId(),
+                order.getPayAmount(),
+                order.getCourseTitle(),
+                order.getCourseSubtitle(),
+                order.getExpireTime()
+        );
+    }
+
+    @Override
+    @Transactional
+    public OrderPaymentConfirmResponse confirmPayment(String orderNo, ConfirmPaymentRequest request) {
+        if (request == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
+        }
+        if (request.payNo() == null || request.payNo().trim().isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Payment no must not be blank");
+        }
+        if (request.payType() == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Pay type must not be null");
+        }
+        if (request.paidAmount() == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Paid amount must not be null");
+        }
+
+        Order order = getOrderByOrderNo(orderNo);
+        if (order.getPayAmount() == null || order.getPayAmount().compareTo(request.paidAmount()) != 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Paid amount does not match order amount");
+        }
+        if (order.getOrderStatus() == OrderStatus.PAID && order.getPayStatus() == PayStatus.PAID) {
+            return toPaymentConfirmResponse(order);
+        }
+        if (order.getOrderStatus() != OrderStatus.CREATED || order.getPayStatus() != PayStatus.UNPAID) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Only unpaid created orders can be confirmed");
+        }
+        if (order.getExpireTime() != null && !order.getExpireTime().isAfter(LocalDateTime.now())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Order is expired");
+        }
+
+        OrderStatus oldOrderStatus = order.getOrderStatus();
+        PayStatus oldPayStatus = order.getPayStatus();
+        LocalDateTime paidTime = request.paidTime() == null ? LocalDateTime.now() : request.paidTime();
+        order.setOrderStatus(OrderStatus.PAID);
+        order.setPayStatus(PayStatus.PAID);
+        order.setPayType(request.payType());
+        order.setPayTime(paidTime);
+        order.setUpdatedAt(LocalDateTime.now());
+        orderMapper.updateById(order);
+        appendLog(order, oldOrderStatus, order.getOrderStatus(), oldPayStatus, order.getPayStatus(),
+                OrderOperateType.MOCK_PAY_SUCCESS, order.getUserId(), UserRole.STUDENT,
+                "Payment confirmed: " + request.payNo().trim());
+        return toPaymentConfirmResponse(order);
+    }
+
+    @Override
+    @Transactional
+    public void closeExpiredOrder(OrderTimeoutMessage message) {
+        if (message == null || trimToNull(message.orderNo()) == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Order timeout message is invalid");
+        }
+        Order order = getOrderByOrderNo(message.orderNo());
+        if (message.userId() != null && !order.getUserId().equals(message.userId())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Order timeout user does not match");
+        }
+        if (order.getOrderStatus() == OrderStatus.PAID || order.getPayStatus() == PayStatus.PAID) {
+            return;
+        }
+        if (order.getOrderStatus() == OrderStatus.CANCELLED || order.getOrderStatus() == OrderStatus.EXPIRED) {
+            return;
+        }
+        if (order.getOrderStatus() != OrderStatus.CREATED || order.getPayStatus() != PayStatus.UNPAID) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (order.getExpireTime() != null && order.getExpireTime().isAfter(now)) {
+            return;
+        }
+
+        OrderStatus oldOrderStatus = order.getOrderStatus();
+        PayStatus oldPayStatus = order.getPayStatus();
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        order.setCancelTime(now);
+        order.setUpdatedAt(now);
+        orderMapper.updateById(order);
+        appendLog(order, oldOrderStatus, order.getOrderStatus(), oldPayStatus, order.getPayStatus(),
+                OrderOperateType.SYSTEM_EXPIRE, order.getUserId(), UserRole.STUDENT, "Order expired");
+    }
+
+    @Override
+    @Transactional
+    public void handlePaymentSuccess(PaymentSuccessMessage message) {
+        if (message == null || trimToNull(message.payType()) == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Payment success message is invalid");
+        }
+        confirmPayment(message.orderNo(), new ConfirmPaymentRequest(
+                message.payNo(),
+                PayType.valueOf(message.payType()),
+                message.paidAmount(),
+                message.paidTime()
+        ));
+    }
+
     private UserProfileResponse requireEnabledUser(Long id) {
         if (id == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "User id must not be null");
@@ -228,6 +359,20 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Order id must not be null");
         }
         Order order = orderMapper.selectById(id);
+        if (order == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Order does not exist");
+        }
+        return order;
+    }
+
+    private Order getOrderByOrderNo(String orderNo) {
+        String value = trimToNull(orderNo);
+        if (value == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Order no must not be blank");
+        }
+        Order order = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
+                .eq(Order::getOrderNo, value)
+                .last("LIMIT 1"));
         if (order == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Order does not exist");
         }
@@ -317,6 +462,17 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 log.getOperateRole(),
                 log.getRemark(),
                 log.getCreatedAt()
+        );
+    }
+
+    private OrderPaymentConfirmResponse toPaymentConfirmResponse(Order order) {
+        return new OrderPaymentConfirmResponse(
+                order.getOrderNo(),
+                order.getUserId(),
+                order.getPayAmount(),
+                order.getPayStatus(),
+                order.getOrderStatus(),
+                order.getPayTime()
         );
     }
 

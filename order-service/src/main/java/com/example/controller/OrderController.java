@@ -1,10 +1,13 @@
 package com.example.controller;
 
 import com.example.api.ApiResponse;
+import com.example.domain.dto.ConfirmPaymentRequest;
 import com.example.domain.dto.CreateOrderRequest;
 import com.example.domain.enums.OrderStatus;
 import com.example.domain.enums.PayStatus;
 import com.example.domain.vo.OrderDetailResponse;
+import com.example.domain.vo.OrderPayableResponse;
+import com.example.domain.vo.OrderPaymentConfirmResponse;
 import com.example.domain.vo.OrderResponse;
 import com.example.service.OrderService;
 import java.util.List;
@@ -58,5 +61,16 @@ public class OrderController {
                                                       @RequestParam(required = false) OrderStatus orderStatus,
                                                       @RequestParam(required = false) PayStatus payStatus) {
         return ApiResponse.success(orderService.listAdmin(userId, orderStatus, payStatus));
+    }
+
+    @GetMapping("/internal/{orderNo}/payable")
+    public ApiResponse<OrderPayableResponse> getPayable(@PathVariable String orderNo, @RequestParam Long userId) {
+        return ApiResponse.success(orderService.getPayable(orderNo, userId));
+    }
+
+    @PostMapping("/internal/{orderNo}/pay-confirm")
+    public ApiResponse<OrderPaymentConfirmResponse> confirmPayment(@PathVariable String orderNo,
+                                                                   @RequestBody ConfirmPaymentRequest request) {
+        return ApiResponse.success(orderService.confirmPayment(orderNo, request));
     }
 }
