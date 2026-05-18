@@ -22,9 +22,6 @@ public class User {
     @TableField(value = "username")
     private String username;
 
-    @TableField(value = "password_hash")
-    private String passwordHash;
-
     @TableField(value = "nickname")
     private String nickname;
 

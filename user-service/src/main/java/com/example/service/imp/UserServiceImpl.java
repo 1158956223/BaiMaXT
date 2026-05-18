@@ -40,7 +40,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         LocalDateTime now = LocalDateTime.now();
         User user = new User();
         user.setUsername(username);
-        user.setPasswordHash(null);
         user.setNickname(defaultIfBlank(request.nickname(), username));
         user.setPhone(trimToNull(request.phone()));
         user.setEmail(trimToNull(request.email()));
