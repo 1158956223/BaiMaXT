@@ -27,6 +27,7 @@
         <module>gateway-service</module>
         <module>auth-service</module>
         <module>course-service</module>
+        <module>order-service</module>
     </modules>
     <scm>
         <connection/>

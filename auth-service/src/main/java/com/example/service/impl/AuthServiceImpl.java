@@ -192,7 +192,13 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private UserRole defaultRole(UserRole role) {
-        return role == null ? UserRole.STUDENT : role;
+        if (role == null) {
+            return UserRole.STUDENT;
+        }
+        if (UserRole.ADMIN.equals(role)) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Admin accounts cannot be registered publicly");
+        }
+        return role;
     }
 
     private UserRole parseRole(String role) {
