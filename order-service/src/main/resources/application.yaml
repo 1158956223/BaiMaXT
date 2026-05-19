@@ -9,6 +9,11 @@ spring:
     url: jdbc:mysql://localhost:3306/baimaxt
     username: root
     password: 123456
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
   rabbitmq:
     addresses: 192.168.106.101
     username: admin

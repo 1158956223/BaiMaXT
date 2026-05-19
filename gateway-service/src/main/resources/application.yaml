@@ -6,6 +6,11 @@ spring:
     name: gateway-service
   main:
     web-application-type: reactive
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
   cloud:
     nacos:
       discovery:
