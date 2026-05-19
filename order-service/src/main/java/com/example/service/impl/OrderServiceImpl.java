@@ -294,7 +294,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         OrderStatus oldOrderStatus = order.getOrderStatus();
         PayStatus oldPayStatus = order.getPayStatus();
-        order.setOrderStatus(OrderStatus.CANCELLED);
+        order.setOrderStatus(OrderStatus.EXPIRED);
         order.setCancelTime(now);
         order.setUpdatedAt(now);
         orderMapper.updateById(order);
