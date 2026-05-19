@@ -33,7 +33,7 @@ request.interceptors.response.use(
     const message = error.response?.data?.message || error.message || '网络请求失败'
     if (status === 401) {
       const auth = useAuthStore()
-      auth.logout(false)
+      auth.clearSession(false)
     }
     ElMessage.error(message)
     return Promise.reject(error)

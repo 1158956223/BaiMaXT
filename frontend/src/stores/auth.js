@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getCurrentUser, login as loginApi, register as registerApi } from '../api/auth'
+import { getCurrentUser, login as loginApi, logout as logoutApi, register as registerApi } from '../api/auth'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -30,7 +30,13 @@ export const useAuthStore = defineStore('auth', {
       this.loaded = true
       localStorage.setItem('baimaxt_token', data.token)
     },
-    logout(redirect = true) {
+    async logout(redirect = true) {
+      if (this.token) {
+        await logoutApi().catch(() => {})
+      }
+      this.clearSession(redirect)
+    },
+    clearSession(redirect = true) {
       this.token = ''
       this.user = null
       this.loaded = false

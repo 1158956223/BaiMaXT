@@ -52,7 +52,9 @@ public class JwtValidator {
                     asLong(payload.get("accountId")),
                     asLong(payload.get("userId")),
                     asString(payload.get("username")),
-                    asString(payload.get("role"))
+                    asString(payload.get("role")),
+                    asString(payload.get("jti")),
+                    exp
             );
         } catch (Exception exception) {
             throw new IllegalArgumentException("Invalid token", exception);

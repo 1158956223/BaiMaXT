@@ -18,10 +18,12 @@ import com.example.enums.UserStatus;
 import com.example.exception.BusinessException;
 import com.example.mapper.AuthAccountMapper;
 import com.example.service.AuthService;
+import com.example.service.TokenSessionService;
 import com.example.tool.JwtTool;
 import feign.FeignException;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -34,19 +36,22 @@ public class AuthServiceImpl implements AuthService {
     private final TeacherClient teacherClient;
     private final PasswordEncoder passwordEncoder;
     private final JwtTool jwtTool;
+    private final TokenSessionService tokenSessionService;
 
     public AuthServiceImpl(
             AuthAccountMapper authAccountMapper,
             UserClient userClient,
             TeacherClient teacherClient,
             PasswordEncoder passwordEncoder,
-            JwtTool jwtTool
+            JwtTool jwtTool,
+            TokenSessionService tokenSessionService
     ) {
         this.authAccountMapper = authAccountMapper;
         this.userClient = userClient;
         this.teacherClient = teacherClient;
         this.passwordEncoder = passwordEncoder;
         this.jwtTool = jwtTool;
+        this.tokenSessionService = tokenSessionService;
     }
 
     @Override
@@ -112,6 +117,7 @@ public class AuthServiceImpl implements AuthService {
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
         }
+        tokenSessionService.requireActive(payload);
         Long accountId = jwtTool.getLong(payload, "accountId");
         Long userId = jwtTool.getLong(payload, "userId");
         String username = jwtTool.getString(payload, "username");
@@ -124,6 +130,19 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
         }
         return new CurrentUserResponse(accountId, userId, username, role, getUserProfile(userId));
+    }
+
+    @Override
+    public void logout(String authorizationHeader) {
+        String token = extractToken(authorizationHeader);
+        Map<String, Object> payload;
+        try {
+            payload = jwtTool.parseToken(token);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Invalid token");
+        }
+        tokenSessionService.requireActive(payload);
+        tokenSessionService.blacklist(payload);
     }
 
     private UserProfileResponse createUserProfile(RegisterRequest request, String username, UserRole role) {
@@ -186,12 +205,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthResponse toAuthResponse(AuthAccount account, UserProfileResponse user) {
+        String jti = UUID.randomUUID().toString();
         String token = jwtTool.createToken(
                 account.getId(),
                 account.getUserId(),
                 account.getUsername(),
-                account.getRole()
+                account.getRole(),
+                jti
         );
+        tokenSessionService.registerSession(jti, account.getId(), jwtTool.getExpirationSeconds());
         return new AuthResponse(
                 token,
                 account.getId(),

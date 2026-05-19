@@ -13,8 +13,15 @@ import com.example.mapper.TeacherMapper;
 import com.example.service.TeacherService;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+
+import static com.example.config.RedisCacheConfig.COURSE_CATEGORY_ENABLED_CACHE;
+import static com.example.config.RedisCacheConfig.COURSE_PUBLIC_DETAIL_CACHE;
+import static com.example.config.RedisCacheConfig.COURSE_PUBLIC_LIST_CACHE;
+import static com.example.config.RedisCacheConfig.COURSE_TEACHER_ENABLED_CACHE;
 
 @Service
 public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> implements TeacherService {
@@ -26,6 +33,7 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     }
 
     @Override
+    @Cacheable(cacheNames = COURSE_TEACHER_ENABLED_CACHE, key = "'all'")
     public List<TeacherResponse> listEnabled() {
         return teacherMapper.selectList(baseQuery().eq(Teacher::getStatus, EnabledStatus.ENABLED)).stream()
                 .map(this::toResponse)
@@ -45,6 +53,7 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public TeacherResponse create(TeacherRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
@@ -65,6 +74,7 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public TeacherProfileResponse createInternal(CreateTeacherProfileRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
@@ -96,6 +106,7 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public TeacherResponse update(Long id, TeacherRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
@@ -112,6 +123,7 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public TeacherResponse enable(Long id) {
         Teacher teacher = getTeacher(id);
         teacher.setStatus(EnabledStatus.ENABLED);
@@ -121,6 +133,7 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public TeacherResponse disable(Long id) {
         Teacher teacher = getTeacher(id);
         teacher.setStatus(EnabledStatus.DISABLED);

@@ -20,8 +20,10 @@ import com.example.mapper.PayOrderMapper;
 import com.example.mq.MqConstants;
 import com.example.mq.PaymentSuccessMessage;
 import com.example.service.PaymentService;
+import com.example.support.RedisSubmitLock;
 import feign.FeignException;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -36,20 +38,26 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentServiceImpl extends ServiceImpl<PayOrderMapper, PayOrder> implements PaymentService {
 
     private static final DateTimeFormatter PAY_NO_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final Duration SUBMIT_LOCK_TTL = Duration.ofSeconds(10);
+    private static final String PAYMENT_CREATE_LOCK_PREFIX = "baimaxt:pay:submit:create:";
+    private static final String PAYMENT_SUCCESS_LOCK_PREFIX = "baimaxt:pay:submit:success:";
 
     private final PayOrderMapper payOrderMapper;
     private final PayFlowMapper payFlowMapper;
     private final OrderClient orderClient;
     private final RabbitTemplate rabbitTemplate;
+    private final RedisSubmitLock redisSubmitLock;
 
     public PaymentServiceImpl(PayOrderMapper payOrderMapper,
                               PayFlowMapper payFlowMapper,
                               OrderClient orderClient,
-                              RabbitTemplate rabbitTemplate) {
+                              RabbitTemplate rabbitTemplate,
+                              RedisSubmitLock redisSubmitLock) {
         this.payOrderMapper = payOrderMapper;
         this.payFlowMapper = payFlowMapper;
         this.orderClient = orderClient;
         this.rabbitTemplate = rabbitTemplate;
+        this.redisSubmitLock = redisSubmitLock;
     }
 
     @Override
@@ -70,36 +78,45 @@ public class PaymentServiceImpl extends ServiceImpl<PayOrderMapper, PayOrder> im
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Only mock payment is supported now");
         }
 
-        PayOrder successPayment = findLatest(orderNo, request.userId(), PayStatus.SUCCESS);
-        if (successPayment != null) {
-            return toResponse(successPayment);
+        String lockKey = PAYMENT_CREATE_LOCK_PREFIX + request.userId() + ":" + orderNo;
+        String lockValue = redisSubmitLock.tryLock(lockKey, SUBMIT_LOCK_TTL);
+        if (lockValue == null) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Please do not submit repeatedly");
         }
-
-        PayOrder waitingPayment = findLatest(orderNo, request.userId(), PayStatus.WAITING);
-        LocalDateTime now = LocalDateTime.now();
-        if (waitingPayment != null) {
-            if (waitingPayment.getExpireTime().isAfter(now)) {
-                return toResponse(waitingPayment);
+        try {
+            PayOrder successPayment = findLatest(orderNo, request.userId(), PayStatus.SUCCESS);
+            if (successPayment != null) {
+                return toResponse(successPayment);
             }
-            closeExpired(waitingPayment, now);
-        }
 
-        OrderPayableResponse order = requirePayableOrder(orderNo, request.userId());
-        PayOrder payment = new PayOrder();
-        payment.setPayNo(generatePayNo());
-        payment.setOrderNo(order.orderNo());
-        payment.setUserId(order.userId());
-        payment.setPayAmount(requireMoney(order.payAmount()));
-        payment.setPayType(payType);
-        payment.setPayStatus(PayStatus.WAITING);
-        payment.setSubject(trimToNull(order.subject()));
-        payment.setDescription(trimToNull(order.description()));
-        payment.setExpireTime(order.expireTime() == null ? now.plusMinutes(30) : order.expireTime());
-        payment.setCreatedAt(now);
-        payment.setUpdatedAt(now);
-        payOrderMapper.insert(payment);
-        appendFlow(payment, PayFlowType.CREATE, "Create payment", null);
-        return toResponse(payment);
+            PayOrder waitingPayment = findLatest(orderNo, request.userId(), PayStatus.WAITING);
+            LocalDateTime now = LocalDateTime.now();
+            if (waitingPayment != null) {
+                if (waitingPayment.getExpireTime().isAfter(now)) {
+                    return toResponse(waitingPayment);
+                }
+                closeExpired(waitingPayment, now);
+            }
+
+            OrderPayableResponse order = requirePayableOrder(orderNo, request.userId());
+            PayOrder payment = new PayOrder();
+            payment.setPayNo(generatePayNo());
+            payment.setOrderNo(order.orderNo());
+            payment.setUserId(order.userId());
+            payment.setPayAmount(requireMoney(order.payAmount()));
+            payment.setPayType(payType);
+            payment.setPayStatus(PayStatus.WAITING);
+            payment.setSubject(trimToNull(order.subject()));
+            payment.setDescription(trimToNull(order.description()));
+            payment.setExpireTime(order.expireTime() == null ? now.plusMinutes(30) : order.expireTime());
+            payment.setCreatedAt(now);
+            payment.setUpdatedAt(now);
+            payOrderMapper.insert(payment);
+            appendFlow(payment, PayFlowType.CREATE, "Create payment", null);
+            return toResponse(payment);
+        } finally {
+            redisSubmitLock.release(lockKey, lockValue);
+        }
     }
 
     @Override
@@ -121,28 +138,41 @@ public class PaymentServiceImpl extends ServiceImpl<PayOrderMapper, PayOrder> im
     @Override
     @Transactional
     public PaymentResponse mockSuccess(String payNo, Long userId) {
-        PayOrder payment = requireOwnedPayment(payNo, userId);
-        if (payment.getPayStatus() == PayStatus.SUCCESS) {
-            return toResponse(payment);
+        String payNoValue = trimToNull(payNo);
+        if (payNoValue == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Payment no must not be blank");
         }
-        if (payment.getPayStatus() != PayStatus.WAITING) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Only waiting payments can be paid");
+        String lockKey = PAYMENT_SUCCESS_LOCK_PREFIX + payNoValue;
+        String lockValue = redisSubmitLock.tryLock(lockKey, SUBMIT_LOCK_TTL);
+        if (lockValue == null) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Please do not submit repeatedly");
         }
-        LocalDateTime now = LocalDateTime.now();
-        if (!payment.getExpireTime().isAfter(now)) {
-            closeExpired(payment, now);
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Payment is expired");
-        }
+        try {
+            PayOrder payment = requireOwnedPayment(payNoValue, userId);
+            if (payment.getPayStatus() == PayStatus.SUCCESS) {
+                return toResponse(payment);
+            }
+            if (payment.getPayStatus() != PayStatus.WAITING) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Only waiting payments can be paid");
+            }
+            LocalDateTime now = LocalDateTime.now();
+            if (!payment.getExpireTime().isAfter(now)) {
+                closeExpired(payment, now);
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Payment is expired");
+            }
 
-        String tradeNo = generateMockTradeNo();
-        payment.setPayStatus(PayStatus.SUCCESS);
-        payment.setTradeNo(tradeNo);
-        payment.setPayTime(now);
-        payment.setUpdatedAt(now);
-        payOrderMapper.updateById(payment);
-        appendFlow(payment, PayFlowType.SUCCESS, "Mock pay success", "mock success");
-        publishPaymentSuccess(payment);
-        return toResponse(payment);
+            String tradeNo = generateMockTradeNo();
+            payment.setPayStatus(PayStatus.SUCCESS);
+            payment.setTradeNo(tradeNo);
+            payment.setPayTime(now);
+            payment.setUpdatedAt(now);
+            payOrderMapper.updateById(payment);
+            appendFlow(payment, PayFlowType.SUCCESS, "Mock pay success", "mock success");
+            publishPaymentSuccess(payment);
+            return toResponse(payment);
+        } finally {
+            redisSubmitLock.release(lockKey, lockValue);
+        }
     }
 
     @Override

@@ -31,8 +31,10 @@ import com.example.mq.MqConstants;
 import com.example.mq.OrderTimeoutMessage;
 import com.example.mq.PaymentSuccessMessage;
 import com.example.service.OrderService;
+import com.example.support.RedisSubmitLock;
 import feign.FeignException;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -47,23 +49,28 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements OrderService {
 
     private static final DateTimeFormatter ORDER_NO_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final Duration SUBMIT_LOCK_TTL = Duration.ofSeconds(10);
+    private static final String ORDER_SUBMIT_LOCK_PREFIX = "baimaxt:order:submit:";
 
     private final OrderMapper orderMapper;
     private final OrderStatusLogMapper statusLogMapper;
     private final UserClient userClient;
     private final CourseClient courseClient;
     private final RabbitTemplate rabbitTemplate;
+    private final RedisSubmitLock redisSubmitLock;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             OrderStatusLogMapper statusLogMapper,
                             UserClient userClient,
                             CourseClient courseClient,
-                            RabbitTemplate rabbitTemplate) {
+                            RabbitTemplate rabbitTemplate,
+                            RedisSubmitLock redisSubmitLock) {
         this.orderMapper = orderMapper;
         this.statusLogMapper = statusLogMapper;
         this.userClient = userClient;
         this.courseClient = courseClient;
         this.rabbitTemplate = rabbitTemplate;
+        this.redisSubmitLock = redisSubmitLock;
     }
 
     @Override
@@ -72,41 +79,56 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
         }
-        UserProfileResponse user = requireEnabledUser(request.userId());
-        CourseDetailClientResponse course = requireOnSaleCourse(request.courseId());
-        LocalDateTime now = LocalDateTime.now();
-        BigDecimal price = requireMoney(course.price());
-        BigDecimal originalAmount = course.originalPrice() == null ? price : course.originalPrice();
-        BigDecimal discountAmount = originalAmount.compareTo(price) > 0 ? originalAmount.subtract(price) : BigDecimal.ZERO;
-        TeacherClientResponse teacher = course.teacher();
+        if (request.userId() == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "User id must not be null");
+        }
+        if (request.courseId() == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Course id must not be null");
+        }
+        String lockKey = ORDER_SUBMIT_LOCK_PREFIX + request.userId() + ":" + request.courseId();
+        String lockValue = redisSubmitLock.tryLock(lockKey, SUBMIT_LOCK_TTL);
+        if (lockValue == null) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Please do not submit repeatedly");
+        }
+        try {
+            UserProfileResponse user = requireEnabledUser(request.userId());
+            CourseDetailClientResponse course = requireOnSaleCourse(request.courseId());
+            LocalDateTime now = LocalDateTime.now();
+            BigDecimal price = requireMoney(course.price());
+            BigDecimal originalAmount = course.originalPrice() == null ? price : course.originalPrice();
+            BigDecimal discountAmount = originalAmount.compareTo(price) > 0 ? originalAmount.subtract(price) : BigDecimal.ZERO;
+            TeacherClientResponse teacher = course.teacher();
 
-        Order order = new Order();
-        order.setOrderNo(generateOrderNo());
-        order.setUserId(user.id());
-        order.setCourseId(course.id());
-        order.setCourseTitle(course.title());
-        order.setCourseSubtitle(course.subtitle());
-        order.setTeacherId(teacher == null ? null : teacher.id());
-        order.setTeacherName(teacher == null ? null : teacher.name());
-        order.setOriginalAmount(originalAmount);
-        order.setPayAmount(price);
-        order.setDiscountAmount(discountAmount);
-        order.setOrderStatus(OrderStatus.CREATED);
-        order.setPayStatus(PayStatus.UNPAID);
-        order.setPayType(PayType.MOCK);
-        order.setExpireTime(now.plusMinutes(30));
-        order.setRemark(trimToNull(request.remark()));
-        order.setCreatedAt(now);
-        order.setUpdatedAt(now);
-        orderMapper.insert(order);
-        appendLog(order, null, order.getOrderStatus(), null, order.getPayStatus(),
-                OrderOperateType.CREATE_ORDER, user.id(), user.role(), "Create order");
-        rabbitTemplate.convertAndSend(
-                MqConstants.ORDER_EXCHANGE,
-                MqConstants.ORDER_TIMEOUT_DELAY_ROUTING_KEY,
-                new OrderTimeoutMessage(order.getOrderNo(), order.getUserId(), order.getExpireTime())
-        );
-        return toResponse(order);
+            Order order = new Order();
+            order.setOrderNo(generateOrderNo());
+            order.setUserId(user.id());
+            order.setCourseId(course.id());
+            order.setCourseTitle(course.title());
+            order.setCourseSubtitle(course.subtitle());
+            order.setTeacherId(teacher == null ? null : teacher.id());
+            order.setTeacherName(teacher == null ? null : teacher.name());
+            order.setOriginalAmount(originalAmount);
+            order.setPayAmount(price);
+            order.setDiscountAmount(discountAmount);
+            order.setOrderStatus(OrderStatus.CREATED);
+            order.setPayStatus(PayStatus.UNPAID);
+            order.setPayType(PayType.MOCK);
+            order.setExpireTime(now.plusMinutes(30));
+            order.setRemark(trimToNull(request.remark()));
+            order.setCreatedAt(now);
+            order.setUpdatedAt(now);
+            orderMapper.insert(order);
+            appendLog(order, null, order.getOrderStatus(), null, order.getPayStatus(),
+                    OrderOperateType.CREATE_ORDER, user.id(), user.role(), "Create order");
+            rabbitTemplate.convertAndSend(
+                    MqConstants.ORDER_EXCHANGE,
+                    MqConstants.ORDER_TIMEOUT_DELAY_ROUTING_KEY,
+                    new OrderTimeoutMessage(order.getOrderNo(), order.getUserId(), order.getExpireTime())
+            );
+            return toResponse(order);
+        } finally {
+            redisSubmitLock.release(lockKey, lockValue);
+        }
     }
 
     @Override

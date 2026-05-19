@@ -10,6 +10,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+
+import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +23,7 @@ public class JwtTool {
     private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
     private final ObjectMapper objectMapper;
     private final String secret;
+    @Getter
     private final long expirationSeconds;
 
     public JwtTool(
@@ -33,7 +36,7 @@ public class JwtTool {
         this.expirationSeconds = expirationSeconds;
     }
 
-    public String createToken(Long accountId, Long userId, String username, UserRole role) {
+    public String createToken(Long accountId, Long userId, String username, UserRole role, String jti) {
         try {
             Map<String, Object> header = new LinkedHashMap<>();
             header.put("alg", "HS256");
@@ -45,6 +48,7 @@ public class JwtTool {
             payload.put("userId", userId);
             payload.put("username", username);
             payload.put("role", role.name());
+            payload.put("jti", jti);
             payload.put("iat", now.getEpochSecond());
             payload.put("exp", now.plusSeconds(expirationSeconds).getEpochSecond());
 

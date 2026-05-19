@@ -11,8 +11,15 @@ import com.example.mapper.CourseCategoryMapper;
 import com.example.service.CategoryService;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+
+import static com.example.config.RedisCacheConfig.COURSE_CATEGORY_ENABLED_CACHE;
+import static com.example.config.RedisCacheConfig.COURSE_PUBLIC_DETAIL_CACHE;
+import static com.example.config.RedisCacheConfig.COURSE_PUBLIC_LIST_CACHE;
+import static com.example.config.RedisCacheConfig.COURSE_TEACHER_ENABLED_CACHE;
 
 @Service
 public class CategoryServiceImpl extends ServiceImpl<CourseCategoryMapper, CourseCategory> implements CategoryService {
@@ -24,6 +31,7 @@ public class CategoryServiceImpl extends ServiceImpl<CourseCategoryMapper, Cours
     }
 
     @Override
+    @Cacheable(cacheNames = COURSE_CATEGORY_ENABLED_CACHE, key = "'all'")
     public List<CategoryResponse> listEnabled() {
         return categoryMapper.selectList(baseQuery().eq(CourseCategory::getStatus, EnabledStatus.ENABLED)).stream()
                 .map(this::toResponse)
@@ -38,6 +46,7 @@ public class CategoryServiceImpl extends ServiceImpl<CourseCategoryMapper, Cours
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CategoryResponse create(CategoryRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
@@ -55,6 +64,7 @@ public class CategoryServiceImpl extends ServiceImpl<CourseCategoryMapper, Cours
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CategoryResponse update(Long id, CategoryRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
@@ -69,6 +79,7 @@ public class CategoryServiceImpl extends ServiceImpl<CourseCategoryMapper, Cours
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CategoryResponse enable(Long id) {
         CourseCategory category = getCategory(id);
         category.setStatus(EnabledStatus.ENABLED);
@@ -78,6 +89,7 @@ public class CategoryServiceImpl extends ServiceImpl<CourseCategoryMapper, Cours
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CategoryResponse disable(Long id) {
         CourseCategory category = getCategory(id);
         category.setStatus(EnabledStatus.DISABLED);

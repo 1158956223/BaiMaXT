@@ -2,6 +2,7 @@ package com.example.filter;
 
 import com.example.auth.JwtPayload;
 import com.example.auth.JwtValidator;
+import com.example.auth.TokenStateService;
 import com.example.support.GatewayResponseWriter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -20,10 +21,14 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
     private static final String ADMIN_ROLE = "ADMIN";
 
     private final JwtValidator jwtValidator;
+    private final TokenStateService tokenStateService;
     private final GatewayResponseWriter responseWriter;
 
-    public AuthGatewayFilter(JwtValidator jwtValidator, GatewayResponseWriter responseWriter) {
+    public AuthGatewayFilter(JwtValidator jwtValidator,
+                             TokenStateService tokenStateService,
+                             GatewayResponseWriter responseWriter) {
         this.jwtValidator = jwtValidator;
+        this.tokenStateService = tokenStateService;
         this.responseWriter = responseWriter;
     }
 
@@ -51,17 +56,23 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
             return responseWriter.write(exchange, HttpStatus.UNAUTHORIZED, "Invalid or missing token");
         }
 
-        if (path.startsWith("/api/admin/") && !ADMIN_ROLE.equals(payload.role())) {
-            return responseWriter.write(exchange, HttpStatus.FORBIDDEN, "Forbidden");
-        }
+        return tokenStateService.isActive(payload)
+                .flatMap(active -> {
+                    if (!Boolean.TRUE.equals(active)) {
+                        return responseWriter.write(exchange, HttpStatus.UNAUTHORIZED, "Invalid or missing token");
+                    }
+                    if (path.startsWith("/api/admin/") && !ADMIN_ROLE.equals(payload.role())) {
+                        return responseWriter.write(exchange, HttpStatus.FORBIDDEN, "Forbidden");
+                    }
 
-        ServerHttpRequest mutatedRequest = request.mutate()
-                .header("X-Account-Id", payload.accountId().toString())
-                .header("X-User-Id", payload.userId().toString())
-                .header("X-Username", payload.username())
-                .header("X-User-Role", payload.role())
-                .build();
-        return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                    ServerHttpRequest mutatedRequest = request.mutate()
+                            .header("X-Account-Id", payload.accountId().toString())
+                            .header("X-User-Id", payload.userId().toString())
+                            .header("X-Username", payload.username())
+                            .header("X-User-Role", payload.role())
+                            .build();
+                    return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                });
     }
 
     @Override

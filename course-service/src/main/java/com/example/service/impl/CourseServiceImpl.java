@@ -21,8 +21,15 @@ import com.example.service.CourseService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+
+import static com.example.config.RedisCacheConfig.COURSE_CATEGORY_ENABLED_CACHE;
+import static com.example.config.RedisCacheConfig.COURSE_PUBLIC_DETAIL_CACHE;
+import static com.example.config.RedisCacheConfig.COURSE_PUBLIC_LIST_CACHE;
+import static com.example.config.RedisCacheConfig.COURSE_TEACHER_ENABLED_CACHE;
 
 @Service
 public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> implements CourseService {
@@ -40,6 +47,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     }
 
     @Override
+    @Cacheable(cacheNames = COURSE_PUBLIC_LIST_CACHE, keyGenerator = "courseCacheKeyGenerator")
     public List<CourseListResponse> listOnSale(Long categoryId, String keyword) {
         LambdaQueryWrapper<Course> query = baseQuery(categoryId, keyword)
                 .eq(Course::getStatus, CourseStatus.ON_SALE);
@@ -56,6 +64,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     }
 
     @Override
+    @Cacheable(cacheNames = COURSE_PUBLIC_DETAIL_CACHE, key = "#p0")
     public CourseDetailResponse getPublicDetail(Long id) {
         Course course = getCourse(id);
         if (course.getStatus() != CourseStatus.ON_SALE) {
@@ -70,6 +79,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CourseDetailResponse create(CourseRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
@@ -88,6 +98,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CourseDetailResponse update(Long id, CourseRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
@@ -105,6 +116,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CourseDetailResponse onSale(Long id) {
         Course course = getCourse(id);
         requireEnabledCategory(course.getCategoryId());
@@ -116,6 +128,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     }
 
     @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CourseDetailResponse offSale(Long id) {
         Course course = getCourse(id);
         course.setStatus(CourseStatus.OFF_SALE);
