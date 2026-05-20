@@ -17,7 +17,7 @@
               <span>课时：{{ course.durationDesc || '待定' }}</span>
               <span>教师：{{ course.teacher?.name || '待定' }}</span>
             </div>
-            <el-button type="primary" size="large" @click="showPending">立即报课</el-button>
+            <el-button type="primary" size="large" :loading="ordering" @click="submitOrder">立即报课</el-button>
           </div>
         </div>
 
@@ -40,8 +40,8 @@
               <img :src="course.teacher.avatarUrl || fallbackAvatar" :alt="course.teacher.name" />
               <div>
                 <strong>{{ course.teacher.name }}</strong>
-                <p>{{ course.teacher.title }} · {{ course.teacher.yearsExperience || 0 }} 年经验</p>
-                <p>{{ course.teacher.specialties }}</p>
+                <p>{{ course.teacher.title || '授课教师' }} · {{ course.teacher.yearsExperience || 0 }} 年经验</p>
+                <p>{{ course.teacher.specialties || '暂无擅长领域' }}</p>
               </div>
             </div>
           </section>
@@ -54,19 +54,43 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getCourse } from '../api/courses'
+import { createOrder } from '../api/orders'
+import { useAuthStore } from '../stores/auth'
 import { courseTypeText, formatMoney } from '../utils/format'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 const course = ref(null)
 const loading = ref(false)
+const ordering = ref(false)
 const fallbackCover = 'https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format&fit=crop&w=1000&q=80'
 const fallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80'
 
-const showPending = () => {
-  ElMessage.info('订单服务暂未接入')
+const submitOrder = async () => {
+  if (!auth.token) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  if (!auth.currentUserId) {
+    ElMessage.error('当前登录用户信息不完整，请重新登录')
+    return
+  }
+  ordering.value = true
+  try {
+    const order = await createOrder({
+      userId: auth.currentUserId,
+      courseId: Number(route.params.id),
+      remark: ''
+    })
+    ElMessage.success('报课订单已创建')
+    router.push(`/orders/${order.id}`)
+  } finally {
+    ordering.value = false
+  }
 }
 
 onMounted(async () => {

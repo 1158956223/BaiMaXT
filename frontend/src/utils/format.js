@@ -32,3 +32,33 @@ export const roleText = {
   TEACHER: '教师',
   ADMIN: '管理员'
 }
+
+export const orderStatusText = {
+  CREATED: '待支付',
+  PAID: '已支付',
+  CANCELLED: '已取消',
+  EXPIRED: '已过期'
+}
+
+export const payStatusText = {
+  UNPAID: '未支付',
+  PAID: '已支付',
+  WAITING: '待支付',
+  SUCCESS: '支付成功',
+  FAILED: '支付失败',
+  CLOSED: '已关闭'
+}
+
+export const payTypeText = {
+  MOCK: '模拟支付',
+  WECHAT: '微信支付',
+  ALIPAY: '支付宝'
+}
+
+export const formatDateTime = (value) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (num) => String(num).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}

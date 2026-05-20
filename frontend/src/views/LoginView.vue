@@ -4,7 +4,7 @@
       <div class="auth-copy">
         <router-link class="brand" to="/courses">白马学堂</router-link>
         <h1>欢迎回来</h1>
-        <p>登录后继续管理课程、教师和学员信息。</p>
+        <p>登录后继续浏览课程、提交报课订单或进入后台管理。</p>
       </div>
       <el-form class="auth-form" :model="form" label-position="top" @submit.prevent>
         <el-form-item label="用户名">

@@ -8,12 +8,16 @@ import RegisterView from '../views/RegisterView.vue'
 import CourseListView from '../views/CourseListView.vue'
 import CourseDetailView from '../views/CourseDetailView.vue'
 import ProfileView from '../views/ProfileView.vue'
+import OrderListView from '../views/OrderListView.vue'
+import OrderDetailView from '../views/OrderDetailView.vue'
+import PaymentView from '../views/PaymentView.vue'
 import AiView from '../views/AiView.vue'
 import AdminDashboardView from '../views/admin/AdminDashboardView.vue'
 import AdminCoursesView from '../views/admin/AdminCoursesView.vue'
 import AdminCategoriesView from '../views/admin/AdminCategoriesView.vue'
 import AdminTeachersView from '../views/admin/AdminTeachersView.vue'
 import AdminUsersView from '../views/admin/AdminUsersView.vue'
+import AdminOrdersView from '../views/admin/AdminOrdersView.vue'
 import AdminPlaceholderView from '../views/admin/AdminPlaceholderView.vue'
 
 const router = createRouter({
@@ -29,6 +33,9 @@ const router = createRouter({
         { path: 'courses', component: CourseListView },
         { path: 'courses/:id', component: CourseDetailView },
         { path: 'profile', component: ProfileView, meta: { requiresAuth: true } },
+        { path: 'orders', component: OrderListView, meta: { requiresAuth: true } },
+        { path: 'orders/:id', component: OrderDetailView, meta: { requiresAuth: true } },
+        { path: 'payments/:payNo', component: PaymentView, meta: { requiresAuth: true } },
         { path: 'ai', component: AiView }
       ]
     },
@@ -42,8 +49,15 @@ const router = createRouter({
         { path: 'categories', component: AdminCategoriesView },
         { path: 'teachers', component: AdminTeachersView },
         { path: 'users', component: AdminUsersView },
-        { path: 'orders', component: AdminPlaceholderView, props: { title: '订单管理', description: '订单服务暂未接入，后续将在这里展示报课订单、支付状态和售后记录。' } },
-        { path: 'knowledge', component: AdminPlaceholderView, props: { title: '知识库管理', description: 'AI 知识库服务暂未接入，后续将在这里维护 FAQ、政策规则和课程答疑资料。' } }
+        { path: 'orders', component: AdminOrdersView },
+        {
+          path: 'knowledge',
+          component: AdminPlaceholderView,
+          props: {
+            title: '知识库管理',
+            description: '知识库服务暂未接入，后续可在这里维护 FAQ、课程答疑和客服知识材料。'
+          }
+        }
       ]
     }
   ]

@@ -7,6 +7,9 @@ export const useAuthStore = defineStore('auth', {
     user: null,
     loaded: false
   }),
+  getters: {
+    currentUserId: (state) => state.user?.userId || state.user?.id || state.user?.user?.id || state.user?.user?.uid || null
+  },
   actions: {
     async login(form) {
       const data = await loginApi(form)

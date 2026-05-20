@@ -35,16 +35,36 @@
         <el-form-item label="课程标题"><el-input v-model="form.title" /></el-form-item>
         <el-form-item label="副标题"><el-input v-model="form.subtitle" /></el-form-item>
         <el-form-item label="封面地址"><el-input v-model="form.coverUrl" /></el-form-item>
-        <el-form-item label="分类"><el-select v-model="form.categoryId"><el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" /></el-select></el-form-item>
-        <el-form-item label="教师"><el-select v-model="form.teacherId"><el-option v-for="item in teachers" :key="item.id" :label="item.name" :value="item.id" /></el-select></el-form-item>
-        <el-form-item label="课程类型"><el-select v-model="form.courseType"><el-option label="线上课" value="ONLINE" /><el-option label="线下课" value="OFFLINE" /><el-option label="录播课" value="RECORDED" /></el-select></el-form-item>
+        <el-form-item label="分类">
+          <el-select v-model="form.categoryId">
+            <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="教师">
+          <el-select v-model="form.teacherId">
+            <el-option v-for="item in teachers" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="课程类型">
+          <el-select v-model="form.courseType">
+            <el-option label="线上课" value="ONLINE" />
+            <el-option label="线下课" value="OFFLINE" />
+            <el-option label="录播课" value="RECORDED" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="价格"><el-input-number v-model="form.price" :precision="2" :min="0" /></el-form-item>
         <el-form-item label="原价"><el-input-number v-model="form.originalPrice" :precision="2" :min="0" /></el-form-item>
         <el-form-item label="课时描述"><el-input v-model="form.durationDesc" /></el-form-item>
         <el-form-item label="适合人群"><el-input v-model="form.targetAudience" /></el-form-item>
         <el-form-item label="课程介绍"><el-input v-model="form.intro" type="textarea" :rows="3" /></el-form-item>
         <el-form-item label="课程大纲"><el-input v-model="form.outline" type="textarea" :rows="3" /></el-form-item>
-        <el-form-item label="状态"><el-select v-model="form.status"><el-option label="草稿" value="DRAFT" /><el-option label="上架" value="ON_SALE" /><el-option label="下架" value="OFF_SALE" /></el-select></el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="form.status">
+            <el-option label="草稿" value="DRAFT" />
+            <el-option label="上架" value="ON_SALE" />
+            <el-option label="下架" value="OFF_SALE" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="排序"><el-input-number v-model="form.sortOrder" :min="0" /></el-form-item>
       </el-form>
       <template #footer>

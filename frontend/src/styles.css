@@ -109,6 +109,10 @@ a {
   background: #fff;
 }
 
+.filter-bar.order-filter {
+  grid-template-columns: 180px 180px 180px auto;
+}
+
 .course-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -333,7 +337,8 @@ a {
 }
 
 .detail-sections section,
-.chat-shell {
+.chat-shell,
+.info-panel {
   padding: 22px;
   border: 1px solid #dfe5ee;
   border-radius: 8px;
@@ -378,6 +383,50 @@ a {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 12px;
+}
+
+.info-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.info-panel h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.info-panel-head,
+.action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.info-panel-head > div {
+  display: grid;
+  gap: 6px;
+}
+
+.info-panel-head strong {
+  font-size: 22px;
+}
+
+.info-panel-head span {
+  color: #64748b;
+}
+
+.action-row {
+  justify-content: flex-start;
+}
+
+.dashboard-panel {
+  margin-top: 20px;
+}
+
+.section-heading.compact h1 {
+  font-size: 22px;
 }
 
 .admin-layout {
@@ -462,6 +511,7 @@ a {
   }
 
   .filter-bar,
+  .filter-bar.order-filter,
   .detail-hero,
   .auth-panel,
   .auth-panel.wide,

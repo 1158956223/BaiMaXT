@@ -85,7 +85,7 @@ const identityOptions = [
     role: 'STUDENT',
     label: '学生注册',
     title: '我要报名学习',
-    hint: '填写联系方式、学习目标，注册后浏览课程并提交报课订单。',
+    hint: '填写联系方式和学习目标，注册后即可浏览课程并提交报课订单。',
     description: '先选择你的身份，再填写对应资料。',
     formTitle: '学生基础资料'
   },
@@ -94,7 +94,7 @@ const identityOptions = [
     label: '教师注册',
     title: '我要成为教师',
     hint: '填写联系方式、职称、教龄和擅长领域，便于后续完善教师资料。',
-    description: '教师账号会进入对应工作台，教师展示资料后续可由后台继续维护。',
+    description: '教师账号会生成对应教师资料，后续可由后台继续维护。',
     formTitle: '教师基础资料'
   }
 ]
