@@ -1,0 +1,14 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: search-service
+  elasticsearch:
+    uris: 192.168.106.101:9200
+    connection-timeout: 3s
+    socket-timeout: 10s
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848

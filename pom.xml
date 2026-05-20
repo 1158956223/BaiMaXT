@@ -29,6 +29,7 @@
         <module>course-service</module>
         <module>order-service</module>
         <module>pay-service</module>
+        <module>search-service</module>
     </modules>
     <scm>
         <connection/>
