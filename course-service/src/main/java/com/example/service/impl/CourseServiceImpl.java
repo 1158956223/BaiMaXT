@@ -19,6 +19,8 @@ import com.example.mapper.CourseCategoryMapper;
 import com.example.mapper.CourseMapper;
 import com.example.mapper.TeacherMapper;
 import com.example.mapper.UserMapper;
+import com.example.mq.CourseIndexEventType;
+import com.example.mq.CourseIndexMessagePublisher;
 import com.example.service.CourseService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -40,15 +42,18 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     private final CourseCategoryMapper categoryMapper;
     private final TeacherMapper teacherMapper;
     private final UserMapper userMapper;
+    private final CourseIndexMessagePublisher courseIndexMessagePublisher;
 
     public CourseServiceImpl(CourseMapper courseMapper,
                              CourseCategoryMapper categoryMapper,
                              TeacherMapper teacherMapper,
-                             UserMapper userMapper) {
+                             UserMapper userMapper,
+                             CourseIndexMessagePublisher courseIndexMessagePublisher) {
         this.courseMapper = courseMapper;
         this.categoryMapper = categoryMapper;
         this.teacherMapper = teacherMapper;
         this.userMapper = userMapper;
+        this.courseIndexMessagePublisher = courseIndexMessagePublisher;
     }
 
     @Override
@@ -99,6 +104,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         course.setCreatedAt(now);
         course.setUpdatedAt(now);
         courseMapper.insert(course);
+        courseIndexMessagePublisher.publish(course.getId(), CourseIndexEventType.CREATED);
         return toDetailResponse(course);
     }
 
@@ -117,6 +123,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         }
         course.setUpdatedAt(LocalDateTime.now());
         courseMapper.updateById(course);
+        courseIndexMessagePublisher.publish(course.getId(), CourseIndexEventType.UPDATED);
         return toDetailResponse(course);
     }
 
@@ -129,6 +136,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         course.setStatus(CourseStatus.ON_SALE);
         course.setUpdatedAt(LocalDateTime.now());
         courseMapper.updateById(course);
+        courseIndexMessagePublisher.publish(course.getId(), CourseIndexEventType.ON_SALE);
         return toDetailResponse(course);
     }
 
@@ -139,6 +147,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         course.setStatus(CourseStatus.OFF_SALE);
         course.setUpdatedAt(LocalDateTime.now());
         courseMapper.updateById(course);
+        courseIndexMessagePublisher.publish(course.getId(), CourseIndexEventType.OFF_SALE);
         return toDetailResponse(course);
     }
 
