@@ -29,6 +29,7 @@ const router = createRouter({
     {
       path: '/',
       component: PublicLayout,
+      meta: { requiresAuth: true },
       children: [
         { path: 'courses', component: CourseListView },
         { path: 'courses/:id', component: CourseDetailView },
