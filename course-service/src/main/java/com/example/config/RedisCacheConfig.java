@@ -1,18 +1,23 @@
 package com.example.config;
 
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.example.domain.vo.CategoryResponse;
+import com.example.domain.vo.CourseDetailResponse;
+import com.example.domain.vo.CourseListResponse;
+import com.example.domain.vo.TeacherResponse;
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.cache.RedisCacheManagerBuilderCustomizer;
 import org.springframework.cache.interceptor.KeyGenerator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 
 @Configuration
@@ -25,15 +30,27 @@ public class RedisCacheConfig {
 
     @Bean
     public RedisCacheManagerBuilderCustomizer redisCacheManagerBuilderCustomizer(ObjectMapper objectMapper) {
-        RedisCacheConfiguration listConfig = cacheConfiguration(objectMapper, Duration.ofMinutes(10));
-        RedisCacheConfiguration detailConfig = cacheConfiguration(objectMapper, Duration.ofMinutes(15));
+        JavaType courseListType = objectMapper.getTypeFactory()
+                .constructCollectionType(List.class, CourseListResponse.class);
+        JavaType categoryListType = objectMapper.getTypeFactory()
+                .constructCollectionType(List.class, CategoryResponse.class);
+        JavaType teacherListType = objectMapper.getTypeFactory()
+                .constructCollectionType(List.class, TeacherResponse.class);
+        JavaType courseDetailType = objectMapper.getTypeFactory()
+                .constructType(CourseDetailResponse.class);
+
+        RedisCacheConfiguration courseListConfig = cacheConfiguration(objectMapper, Duration.ofMinutes(10), courseListType);
+        RedisCacheConfiguration categoryListConfig = cacheConfiguration(objectMapper, Duration.ofMinutes(10), categoryListType);
+        RedisCacheConfiguration teacherListConfig = cacheConfiguration(objectMapper, Duration.ofMinutes(10), teacherListType);
+        RedisCacheConfiguration detailConfig = cacheConfiguration(objectMapper, Duration.ofMinutes(15), courseDetailType);
+
         Map<String, RedisCacheConfiguration> configurations = new HashMap<>();
-        configurations.put(COURSE_PUBLIC_LIST_CACHE, listConfig);
-        configurations.put(COURSE_CATEGORY_ENABLED_CACHE, listConfig);
-        configurations.put(COURSE_TEACHER_ENABLED_CACHE, listConfig);
+        configurations.put(COURSE_PUBLIC_LIST_CACHE, courseListConfig);
+        configurations.put(COURSE_CATEGORY_ENABLED_CACHE, categoryListConfig);
+        configurations.put(COURSE_TEACHER_ENABLED_CACHE, teacherListConfig);
         configurations.put(COURSE_PUBLIC_DETAIL_CACHE, detailConfig);
         return builder -> builder
-                .cacheDefaults(listConfig)
+                .cacheDefaults(courseListConfig)
                 .withInitialCacheConfigurations(configurations);
     }
 
@@ -51,16 +68,11 @@ public class RedisCacheConfig {
         };
     }
 
-    private RedisCacheConfiguration cacheConfiguration(ObjectMapper objectMapper, Duration ttl) {
+    private RedisCacheConfiguration cacheConfiguration(ObjectMapper objectMapper, Duration ttl, JavaType javaType) {
         ObjectMapper redisObjectMapper = objectMapper.copy()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        redisObjectMapper.activateDefaultTyping(
-                redisObjectMapper.getPolymorphicTypeValidator(),
-                ObjectMapper.DefaultTyping.NON_FINAL,
-                JsonTypeInfo.As.PROPERTY
-        );
-        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(redisObjectMapper);
+        Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(redisObjectMapper, javaType);
         return RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(ttl)
                 .disableCachingNullValues()
