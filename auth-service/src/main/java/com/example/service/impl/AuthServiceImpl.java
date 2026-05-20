@@ -168,7 +168,7 @@ public class AuthServiceImpl implements AuthService {
         try {
             ApiResponse<TeacherProfileResponse> response = teacherClient.createInternal(new CreateTeacherProfileRequest(
                     user.id(),
-                    defaultIfBlank(user.nickname(), user.username()),
+                    user.username(),
                     trimToNull(request.teacherTitle()),
                     trimToNull(request.teacherBio()),
                     specialties,

@@ -13,10 +13,12 @@ import com.example.domain.enums.EnabledStatus;
 import com.example.domain.po.Course;
 import com.example.domain.po.CourseCategory;
 import com.example.domain.po.Teacher;
+import com.example.domain.po.User;
 import com.example.exception.BusinessException;
 import com.example.mapper.CourseCategoryMapper;
 import com.example.mapper.CourseMapper;
 import com.example.mapper.TeacherMapper;
+import com.example.mapper.UserMapper;
 import com.example.service.CourseService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -37,13 +39,16 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     private final CourseMapper courseMapper;
     private final CourseCategoryMapper categoryMapper;
     private final TeacherMapper teacherMapper;
+    private final UserMapper userMapper;
 
     public CourseServiceImpl(CourseMapper courseMapper,
                              CourseCategoryMapper categoryMapper,
-                             TeacherMapper teacherMapper) {
+                             TeacherMapper teacherMapper,
+                             UserMapper userMapper) {
         this.courseMapper = courseMapper;
         this.categoryMapper = categoryMapper;
         this.teacherMapper = teacherMapper;
+        this.userMapper = userMapper;
     }
 
     @Override
@@ -257,7 +262,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         if (teacher == null) {
             return null;
         }
-        return new TeacherSummaryResponse(teacher.getId(), teacher.getName(), teacher.getTitle());
+        return new TeacherSummaryResponse(teacher.getId(), teacherDisplayName(teacher), teacher.getTitle());
     }
 
     private TeacherResponse toTeacherResponse(Teacher teacher) {
@@ -267,7 +272,7 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         return new TeacherResponse(
                 teacher.getId(),
                 teacher.getUserId(),
-                teacher.getName(),
+                teacherDisplayName(teacher),
                 teacher.getTitle(),
                 teacher.getBio(),
                 teacher.getSpecialties(),
@@ -284,6 +289,17 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
             throw new BusinessException(HttpStatus.BAD_REQUEST, message);
         }
         return text;
+    }
+
+    private String teacherDisplayName(Teacher teacher) {
+        if (teacher.getUserId() != null) {
+            User user = userMapper.selectById(teacher.getUserId());
+            String username = user == null ? null : trimToNull(user.getUsername());
+            if (username != null) {
+                return username;
+            }
+        }
+        return teacher.getName();
     }
 
     private BigDecimal requireNonNegativeMoney(BigDecimal value, String message) {

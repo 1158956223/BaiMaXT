@@ -10,6 +10,8 @@ import com.example.dto.teacher.CreateTeacherProfileRequest;
 import com.example.dto.teacher.TeacherProfileResponse;
 import com.example.exception.BusinessException;
 import com.example.mapper.TeacherMapper;
+import com.example.mapper.UserMapper;
+import com.example.domain.po.User;
 import com.example.service.TeacherService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,9 +29,11 @@ import static com.example.config.RedisCacheConfig.COURSE_TEACHER_ENABLED_CACHE;
 public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> implements TeacherService {
 
     private final TeacherMapper teacherMapper;
+    private final UserMapper userMapper;
 
-    public TeacherServiceImpl(TeacherMapper teacherMapper) {
+    public TeacherServiceImpl(TeacherMapper teacherMapper, UserMapper userMapper) {
         this.teacherMapper = teacherMapper;
+        this.userMapper = userMapper;
     }
 
     @Override
@@ -161,7 +165,7 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
         return new TeacherResponse(
                 teacher.getId(),
                 teacher.getUserId(),
-                teacher.getName(),
+                teacherDisplayName(teacher),
                 teacher.getTitle(),
                 teacher.getBio(),
                 teacher.getSpecialties(),
@@ -176,7 +180,7 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
         return new TeacherProfileResponse(
                 teacher.getId(),
                 teacher.getUserId(),
-                teacher.getName(),
+                teacherDisplayName(teacher),
                 teacher.getTitle(),
                 teacher.getBio(),
                 teacher.getSpecialties(),
@@ -193,6 +197,17 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
             throw new BusinessException(HttpStatus.BAD_REQUEST, message);
         }
         return text;
+    }
+
+    private String teacherDisplayName(Teacher teacher) {
+        if (teacher.getUserId() != null) {
+            User user = userMapper.selectById(teacher.getUserId());
+            String username = user == null ? null : trimToNull(user.getUsername());
+            if (username != null) {
+                return username;
+            }
+        }
+        return teacher.getName();
     }
 
     private Integer defaultYears(Integer yearsExperience) {
