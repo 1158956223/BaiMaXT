@@ -8,6 +8,11 @@ spring:
     uris: 192.168.106.101:9200
     connection-timeout: 3s
     socket-timeout: 10s
+  rabbitmq:
+    addresses: 192.168.106.101
+    username: admin
+    password: admin
+    virtual-host: /test
   cloud:
     nacos:
       discovery:
