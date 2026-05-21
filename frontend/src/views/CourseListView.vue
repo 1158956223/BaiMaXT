@@ -42,7 +42,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { listCategories } from '../api/categories'
-import { listCourses } from '../api/courses'
+import { searchCourses } from '../api/search'
 import { courseTypeText, formatMoney } from '../utils/format'
 
 const fallbackCover = 'https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format&fit=crop&w=900&q=80'
@@ -58,10 +58,19 @@ const loadCategories = async () => {
 const loadCourses = async () => {
   loading.value = true
   try {
-    courses.value = await listCourses({
+    const result = await searchCourses({
       categoryId: query.categoryId || undefined,
-      keyword: query.keyword || undefined
+      q: query.keyword || undefined,
+      page: 0,
+      size: 50
     })
+    courses.value = (result.records || []).map((course) => ({
+      ...course,
+      teacher: {
+        id: course.teacherId,
+        name: course.teacherName
+      }
+    }))
   } finally {
     loading.value = false
   }
