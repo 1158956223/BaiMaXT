@@ -3,6 +3,7 @@ package com.example.domain.vo;
 import com.example.domain.enums.CourseStatus;
 import com.example.domain.enums.CourseType;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public record CourseListResponse(
         Long id,
@@ -17,6 +18,8 @@ public record CourseListResponse(
         String durationDesc,
         CourseStatus status,
         Integer sortOrder,
-        TeacherSummaryResponse teacher
+        TeacherSummaryResponse teacher,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
 }

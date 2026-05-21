@@ -74,6 +74,17 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     }
 
     @Override
+    public List<CourseListResponse> listTeacherCourses(Long userId, Long categoryId, String keyword) {
+        Teacher teacher = requireCurrentTeacher(userId);
+        return courseMapper.selectList(baseQuery(categoryId, keyword)
+                        .eq(Course::getTeacherId, teacher.getId())
+                        .ne(Course::getStatus, CourseStatus.OFF_SALE))
+                .stream()
+                .map(this::toListResponse)
+                .toList();
+    }
+
+    @Override
     @Cacheable(cacheNames = COURSE_PUBLIC_DETAIL_CACHE, key = "#p0")
     public CourseDetailResponse getPublicDetail(Long id) {
         Course course = getCourse(id);
@@ -89,6 +100,13 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     }
 
     @Override
+    public CourseDetailResponse getTeacherDetail(Long id, Long userId) {
+        Teacher teacher = requireCurrentTeacher(userId);
+        Course course = getTeacherOwnedCourse(id, teacher);
+        return toDetailResponse(course);
+    }
+
+    @Override
     @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CourseDetailResponse create(CourseRequest request) {
         if (request == null) {
@@ -101,6 +119,26 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         Course course = new Course();
         fillCourse(course, request, category, teacher);
         course.setStatus(request.status() == null ? CourseStatus.DRAFT : request.status());
+        course.setCreatedAt(now);
+        course.setUpdatedAt(now);
+        courseMapper.insert(course);
+        courseIndexMessagePublisher.publish(course.getId(), CourseIndexEventType.CREATED);
+        return toDetailResponse(course);
+    }
+
+    @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
+    public CourseDetailResponse createTeacherCourse(CourseRequest request, Long userId) {
+        if (request == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
+        }
+        Teacher teacher = requireCurrentTeacher(userId);
+        CourseCategory category = requireEnabledCategory(request.categoryId());
+        LocalDateTime now = LocalDateTime.now();
+
+        Course course = new Course();
+        fillCourse(course, request, category, teacher);
+        course.setStatus(normalizeTeacherStatus(request.status()));
         course.setCreatedAt(now);
         course.setUpdatedAt(now);
         courseMapper.insert(course);
@@ -129,6 +167,23 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
 
     @Override
     @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
+    public CourseDetailResponse updateTeacherCourse(Long id, CourseRequest request, Long userId) {
+        if (request == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
+        }
+        Teacher teacher = requireCurrentTeacher(userId);
+        Course course = getTeacherOwnedCourse(id, teacher);
+        CourseCategory category = requireEnabledCategory(request.categoryId());
+        fillCourse(course, request, category, teacher);
+        course.setStatus(normalizeTeacherStatus(request.status()));
+        course.setUpdatedAt(LocalDateTime.now());
+        courseMapper.updateById(course);
+        courseIndexMessagePublisher.publish(course.getId(), CourseIndexEventType.UPDATED);
+        return toDetailResponse(course);
+    }
+
+    @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CourseDetailResponse onSale(Long id) {
         Course course = getCourse(id);
         requireEnabledCategory(course.getCategoryId());
@@ -144,6 +199,18 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
     @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public CourseDetailResponse offSale(Long id) {
         Course course = getCourse(id);
+        course.setStatus(CourseStatus.OFF_SALE);
+        course.setUpdatedAt(LocalDateTime.now());
+        courseMapper.updateById(course);
+        courseIndexMessagePublisher.publish(course.getId(), CourseIndexEventType.OFF_SALE);
+        return toDetailResponse(course);
+    }
+
+    @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
+    public CourseDetailResponse deleteTeacherCourse(Long id, Long userId) {
+        Teacher teacher = requireCurrentTeacher(userId);
+        Course course = getTeacherOwnedCourse(id, teacher);
         course.setStatus(CourseStatus.OFF_SALE);
         course.setUpdatedAt(LocalDateTime.now());
         courseMapper.updateById(course);
@@ -206,6 +273,40 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         return teacher;
     }
 
+    private Teacher requireCurrentTeacher(Long userId) {
+        if (userId == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "User id must not be null");
+        }
+        Teacher teacher = teacherMapper.selectOne(new LambdaQueryWrapper<Teacher>()
+                .eq(Teacher::getUserId, userId)
+                .last("LIMIT 1"));
+        if (teacher == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Teacher profile does not exist");
+        }
+        if (teacher.getStatus() != EnabledStatus.ENABLED) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Teacher profile is disabled");
+        }
+        return teacher;
+    }
+
+    private Course getTeacherOwnedCourse(Long id, Teacher teacher) {
+        Course course = getCourse(id);
+        if (!teacher.getId().equals(course.getTeacherId())) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Course does not belong to current teacher");
+        }
+        return course;
+    }
+
+    private CourseStatus normalizeTeacherStatus(CourseStatus status) {
+        if (status == null) {
+            return CourseStatus.DRAFT;
+        }
+        if (status == CourseStatus.OFF_SALE) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Teacher course status must be DRAFT or ON_SALE");
+        }
+        return status;
+    }
+
     private LambdaQueryWrapper<Course> baseQuery(Long categoryId, String keyword) {
         LambdaQueryWrapper<Course> query = new LambdaQueryWrapper<Course>()
                 .orderByAsc(Course::getSortOrder)
@@ -238,7 +339,9 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
                 course.getDurationDesc(),
                 course.getStatus(),
                 course.getSortOrder(),
-                toTeacherSummary(teacher)
+                toTeacherSummary(teacher),
+                course.getCreatedAt(),
+                course.getUpdatedAt()
         );
     }
 

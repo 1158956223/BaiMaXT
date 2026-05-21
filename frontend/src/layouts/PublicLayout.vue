@@ -5,6 +5,7 @@
       <nav class="nav-links">
         <router-link to="/courses">课程</router-link>
         <router-link v-if="auth.token" to="/orders">我的订单</router-link>
+        <router-link v-if="auth.user?.role === 'TEACHER'" to="/teacher/courses">我的课程</router-link>
         <router-link to="/ai">AI 客服</router-link>
         <router-link v-if="auth.user?.role === 'ADMIN'" to="/admin">后台</router-link>
       </nav>

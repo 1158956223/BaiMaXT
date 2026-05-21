@@ -61,7 +61,7 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
                     if (!Boolean.TRUE.equals(active)) {
                         return responseWriter.write(exchange, HttpStatus.UNAUTHORIZED, "Invalid or missing token");
                     }
-                    if (path.startsWith("/api/admin/") && !ADMIN_ROLE.equals(payload.role())) {
+                    if (isAdminPath(path) && !ADMIN_ROLE.equals(payload.role())) {
                         return responseWriter.write(exchange, HttpStatus.FORBIDDEN, "Forbidden");
                     }
 
@@ -83,7 +83,8 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
     private boolean isPublicPath(ServerHttpRequest request) {
         String path = request.getURI().getPath();
         HttpMethod method = request.getMethod();
-        return HttpMethod.POST.equals(method)
+        return HttpMethod.GET.equals(method) && path.startsWith("/api/courses/covers/")
+                || HttpMethod.POST.equals(method)
                 && ("/api/auth/login".equals(path) || "/api/auth/register".equals(path));
     }
 
@@ -96,6 +97,19 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
                 || path.equals("/api/orders/internal")
                 || path.startsWith("/api/payments/internal/")
                 || path.equals("/api/payments/internal");
+    }
+
+    private boolean isAdminPath(String path) {
+        return matchesPath(path, "/api/admin")
+                || matchesPath(path, "/api/courses/admin")
+                || matchesPath(path, "/api/teachers/admin")
+                || matchesPath(path, "/api/course-categories/admin")
+                || matchesPath(path, "/api/orders/admin")
+                || matchesPath(path, "/api/payments/admin");
+    }
+
+    private boolean matchesPath(String path, String prefix) {
+        return path.equals(prefix) || path.startsWith(prefix + "/");
     }
 
     private String extractToken(ServerHttpRequest request) {

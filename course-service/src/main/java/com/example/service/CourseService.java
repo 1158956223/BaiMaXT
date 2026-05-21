@@ -13,15 +13,25 @@ public interface CourseService extends IService<Course> {
 
     List<CourseListResponse> listAll(Long categoryId, String keyword);
 
+    List<CourseListResponse> listTeacherCourses(Long userId, Long categoryId, String keyword);
+
     CourseDetailResponse getPublicDetail(Long id);
 
     CourseDetailResponse getAdminDetail(Long id);
 
+    CourseDetailResponse getTeacherDetail(Long id, Long userId);
+
     CourseDetailResponse create(CourseRequest request);
 
+    CourseDetailResponse createTeacherCourse(CourseRequest request, Long userId);
+
     CourseDetailResponse update(Long id, CourseRequest request);
+
+    CourseDetailResponse updateTeacherCourse(Long id, CourseRequest request, Long userId);
 
     CourseDetailResponse onSale(Long id);
 
     CourseDetailResponse offSale(Long id);
+
+    CourseDetailResponse deleteTeacherCourse(Long id, Long userId);
 }

@@ -7,6 +7,7 @@ import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import CourseListView from '../views/CourseListView.vue'
 import CourseDetailView from '../views/CourseDetailView.vue'
+import TeacherCoursesView from '../views/TeacherCoursesView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import OrderListView from '../views/OrderListView.vue'
 import OrderDetailView from '../views/OrderDetailView.vue'
@@ -33,6 +34,7 @@ const router = createRouter({
       children: [
         { path: 'courses', component: CourseListView },
         { path: 'courses/:id', component: CourseDetailView },
+        { path: 'teacher/courses', component: TeacherCoursesView, meta: { requiresAuth: true, requiresTeacher: true } },
         { path: 'profile', component: ProfileView, meta: { requiresAuth: true } },
         { path: 'orders', component: OrderListView, meta: { requiresAuth: true } },
         { path: 'orders/:id', component: OrderDetailView, meta: { requiresAuth: true } },
@@ -76,6 +78,11 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAdmin && auth.user?.role !== 'ADMIN') {
     ElMessage.warning('需要管理员权限')
+    return '/courses'
+  }
+
+  if (to.meta.requiresTeacher && auth.user?.role !== 'TEACHER') {
+    ElMessage.warning('需要教师权限')
     return '/courses'
   }
 
