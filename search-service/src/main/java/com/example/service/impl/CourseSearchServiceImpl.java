@@ -131,9 +131,7 @@ public class CourseSearchServiceImpl implements CourseSearchService {
                 course.intro(),
                 course.outline(),
                 course.status(),
-                course.sortOrder(),
-                course.createdAt(),
-                course.updatedAt()
+                course.sortOrder()
         );
     }
 
