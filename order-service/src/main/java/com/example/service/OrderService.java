@@ -8,6 +8,7 @@ import com.example.domain.vo.OrderDetailResponse;
 import com.example.domain.vo.OrderPayableResponse;
 import com.example.domain.vo.OrderPaymentConfirmResponse;
 import com.example.domain.vo.OrderResponse;
+import com.example.domain.vo.StudentCourseResponse;
 import com.example.mq.OrderTimeoutMessage;
 import com.example.mq.PaymentSuccessMessage;
 import java.util.List;
@@ -17,6 +18,8 @@ public interface OrderService {
     OrderResponse create(CreateOrderRequest request);
 
     List<OrderResponse> listMine(Long userId);
+
+    List<StudentCourseResponse> listMyCourses(Long userId);
 
     OrderDetailResponse getDetail(Long id, Long userId);
 

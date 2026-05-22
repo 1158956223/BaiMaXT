@@ -9,6 +9,7 @@ import com.example.domain.vo.OrderDetailResponse;
 import com.example.domain.vo.OrderPayableResponse;
 import com.example.domain.vo.OrderPaymentConfirmResponse;
 import com.example.domain.vo.OrderResponse;
+import com.example.domain.vo.StudentCourseResponse;
 import com.example.service.OrderService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,6 +39,11 @@ public class OrderController {
     @GetMapping("/my")
     public ApiResponse<List<OrderResponse>> listMine(@RequestParam Long userId) {
         return ApiResponse.success(orderService.listMine(userId));
+    }
+
+    @GetMapping("/my-courses")
+    public ApiResponse<List<StudentCourseResponse>> listMyCourses(@RequestParam Long userId) {
+        return ApiResponse.success(orderService.listMyCourses(userId));
     }
 
     @GetMapping("/{id}")

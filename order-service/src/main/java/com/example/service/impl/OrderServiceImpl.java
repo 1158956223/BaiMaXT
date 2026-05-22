@@ -21,6 +21,7 @@ import com.example.domain.vo.OrderPayableResponse;
 import com.example.domain.vo.OrderPaymentConfirmResponse;
 import com.example.domain.vo.OrderResponse;
 import com.example.domain.vo.OrderStatusLogResponse;
+import com.example.domain.vo.StudentCourseResponse;
 import com.example.dto.user.UserProfileResponse;
 import com.example.enums.UserRole;
 import com.example.enums.UserStatus;
@@ -150,6 +151,20 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                         .orderByDesc(Order::getId))
                 .stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    public List<StudentCourseResponse> listMyCourses(Long userId) {
+        requireEnabledUser(userId);
+        return orderMapper.selectList(new LambdaQueryWrapper<Order>()
+                        .eq(Order::getUserId, userId)
+                        .eq(Order::getOrderStatus, OrderStatus.PAID)
+                        .eq(Order::getPayStatus, PayStatus.PAID)
+                        .orderByDesc(Order::getPayTime)
+                        .orderByDesc(Order::getId))
+                .stream()
+                .map(this::toStudentCourseResponse)
                 .toList();
     }
 
@@ -532,6 +547,21 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 log.getOperateRole(),
                 log.getRemark(),
                 log.getCreatedAt()
+        );
+    }
+
+    private StudentCourseResponse toStudentCourseResponse(Order order) {
+        return new StudentCourseResponse(
+                order.getId(),
+                order.getOrderNo(),
+                order.getCourseId(),
+                order.getCourseTitle(),
+                order.getCourseSubtitle(),
+                order.getTeacherId(),
+                order.getTeacherName(),
+                order.getPayAmount(),
+                order.getPayTime(),
+                order.getCreatedAt()
         );
     }
 
