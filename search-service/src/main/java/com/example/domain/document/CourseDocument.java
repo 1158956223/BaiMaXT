@@ -52,6 +52,15 @@ public class CourseDocument {
     @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String durationDesc;
 
+    @Field(type = FieldType.Integer)
+    private Integer stock;
+
+    @Field(type = FieldType.Integer)
+    private Integer soldCount;
+
+    @Field(type = FieldType.Integer)
+    private Integer availableStock;
+
     @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String targetAudience;
 

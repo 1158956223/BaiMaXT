@@ -170,6 +170,18 @@ public class CourseController {
         return ApiResponse.success(courseService.offSale(id));
     }
 
+    @PostMapping("/internal/{id}/stock/decrease")
+    public ApiResponse<Void> decreaseStock(@PathVariable Long id) {
+        courseService.decreaseStock(id);
+        return ApiResponse.success(null);
+    }
+
+    @PostMapping("/internal/{id}/stock/restore")
+    public ApiResponse<Void> restoreStock(@PathVariable Long id) {
+        courseService.restoreStock(id);
+        return ApiResponse.success(null);
+    }
+
     private void requireTeacher(String role) {
         if (!TEACHER_ROLE.equals(role)) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Teacher permission required");

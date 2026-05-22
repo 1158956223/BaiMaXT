@@ -47,6 +47,12 @@ public class Course {
     @TableField("duration_desc")
     private String durationDesc; // 课程周期
 
+    @TableField("stock")
+    private Integer stock;
+
+    @TableField("sold_count")
+    private Integer soldCount;
+
     @TableField("target_audience")
     private String targetAudience; // 适合人群
 

@@ -14,6 +14,7 @@ public record CourseRequest(
         BigDecimal originalPrice,
         CourseType courseType,
         String durationDesc,
+        Integer stock,
         String targetAudience,
         String intro,
         String outline,

@@ -34,4 +34,8 @@ public interface CourseService extends IService<Course> {
     CourseDetailResponse offSale(Long id);
 
     CourseDetailResponse deleteTeacherCourse(Long id, Long userId);
+
+    void decreaseStock(Long id);
+
+    void restoreStock(Long id);
 }

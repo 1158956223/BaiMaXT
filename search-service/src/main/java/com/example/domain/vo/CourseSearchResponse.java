@@ -15,6 +15,9 @@ public record CourseSearchResponse(
         BigDecimal originalPrice,
         String courseType,
         String durationDesc,
+        Integer stock,
+        Integer soldCount,
+        Integer availableStock,
         String status,
         Integer sortOrder,
         Float score

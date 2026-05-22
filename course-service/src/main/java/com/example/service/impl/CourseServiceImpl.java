@@ -218,6 +218,33 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         return toDetailResponse(course);
     }
 
+    @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE}, allEntries = true)
+    public void decreaseStock(Long id) {
+        if (id == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Course id must not be null");
+        }
+        int affected = courseMapper.decreaseStock(id);
+        if (affected == 0) {
+            Course course = getCourse(id);
+            if (course.getStatus() != CourseStatus.ON_SALE) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Course is not on sale");
+            }
+            throw new BusinessException(HttpStatus.CONFLICT, "Course stock is sold out");
+        }
+        courseIndexMessagePublisher.publish(id, CourseIndexEventType.UPDATED);
+    }
+
+    @Override
+    @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE}, allEntries = true)
+    public void restoreStock(Long id) {
+        if (id == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Course id must not be null");
+        }
+        courseMapper.restoreStock(id);
+        courseIndexMessagePublisher.publish(id, CourseIndexEventType.UPDATED);
+    }
+
     private void fillCourse(Course course, CourseRequest request, CourseCategory category, Teacher teacher) {
         course.setCategoryId(category.getId());
         course.setTeacherId(teacher.getId());
@@ -228,6 +255,13 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
         course.setOriginalPrice(optionalNonNegativeMoney(request.originalPrice(), "Original price must not be negative"));
         course.setCourseType(request.courseType() == null ? CourseType.ONLINE : request.courseType());
         course.setDurationDesc(trimToNull(request.durationDesc()));
+        course.setStock(requireNonNegativeInteger(request.stock(), "Course stock must not be null"));
+        if (course.getSoldCount() == null) {
+            course.setSoldCount(0);
+        }
+        if (course.getStock() < course.getSoldCount()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Course stock must not be less than sold count");
+        }
         course.setTargetAudience(trimToNull(request.targetAudience()));
         course.setIntro(trimToNull(request.intro()));
         course.setOutline(trimToNull(request.outline()));
@@ -337,6 +371,9 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
                 course.getOriginalPrice(),
                 course.getCourseType(),
                 course.getDurationDesc(),
+                course.getStock(),
+                course.getSoldCount(),
+                availableStock(course),
                 course.getStatus(),
                 course.getSortOrder(),
                 toTeacherSummary(teacher),
@@ -359,6 +396,9 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
                 course.getOriginalPrice(),
                 course.getCourseType(),
                 course.getDurationDesc(),
+                course.getStock(),
+                course.getSoldCount(),
+                availableStock(course),
                 course.getTargetAudience(),
                 course.getIntro(),
                 course.getOutline(),
@@ -426,6 +466,22 @@ public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> impleme
             throw new BusinessException(HttpStatus.BAD_REQUEST, message);
         }
         return value;
+    }
+
+    private Integer requireNonNegativeInteger(Integer value, String message) {
+        if (value == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, message);
+        }
+        if (value < 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Integer value must not be negative");
+        }
+        return value;
+    }
+
+    private int availableStock(Course course) {
+        int stock = course.getStock() == null ? 0 : course.getStock();
+        int soldCount = course.getSoldCount() == null ? 0 : course.getSoldCount();
+        return Math.max(stock - soldCount, 0);
     }
 
     private String trimToNull(String value) {

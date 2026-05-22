@@ -1,5 +1,6 @@
 package com.example.mq;
 
+import com.example.domain.vo.IndexSyncResponse;
 import com.example.exception.BusinessException;
 import com.example.service.CourseSearchService;
 import feign.FeignException;

@@ -93,39 +93,49 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         try {
             UserProfileResponse user = requireEnabledUser(request.userId());
             CourseDetailClientResponse course = requireOnSaleCourse(request.courseId());
-            LocalDateTime now = LocalDateTime.now();
-            BigDecimal price = requireMoney(course.price());
-            BigDecimal originalAmount = course.originalPrice() == null ? price : course.originalPrice();
-            BigDecimal discountAmount = originalAmount.compareTo(price) > 0 ? originalAmount.subtract(price) : BigDecimal.ZERO;
-            TeacherClientResponse teacher = course.teacher();
+            requireNoActiveOrder(user.id(), course.id());
+            decreaseCourseStock(course.id());
+            boolean stockReserved = true;
+            try {
+                LocalDateTime now = LocalDateTime.now();
+                BigDecimal price = requireMoney(course.price());
+                BigDecimal originalAmount = course.originalPrice() == null ? price : course.originalPrice();
+                BigDecimal discountAmount = originalAmount.compareTo(price) > 0 ? originalAmount.subtract(price) : BigDecimal.ZERO;
+                TeacherClientResponse teacher = course.teacher();
 
-            Order order = new Order();
-            order.setOrderNo(generateOrderNo());
-            order.setUserId(user.id());
-            order.setCourseId(course.id());
-            order.setCourseTitle(course.title());
-            order.setCourseSubtitle(course.subtitle());
-            order.setTeacherId(teacher == null ? null : teacher.id());
-            order.setTeacherName(teacher == null ? null : teacher.name());
-            order.setOriginalAmount(originalAmount);
-            order.setPayAmount(price);
-            order.setDiscountAmount(discountAmount);
-            order.setOrderStatus(OrderStatus.CREATED);
-            order.setPayStatus(PayStatus.UNPAID);
-            order.setPayType(PayType.MOCK);
-            order.setExpireTime(now.plusMinutes(30));
-            order.setRemark(trimToNull(request.remark()));
-            order.setCreatedAt(now);
-            order.setUpdatedAt(now);
-            orderMapper.insert(order);
-            appendLog(order, null, order.getOrderStatus(), null, order.getPayStatus(),
-                    OrderOperateType.CREATE_ORDER, user.id(), user.role(), "Create order");
-            rabbitTemplate.convertAndSend(
-                    MqConstants.ORDER_EXCHANGE,
-                    MqConstants.ORDER_TIMEOUT_DELAY_ROUTING_KEY,
-                    new OrderTimeoutMessage(order.getOrderNo(), order.getUserId(), order.getExpireTime())
-            );
-            return toResponse(order);
+                Order order = new Order();
+                order.setOrderNo(generateOrderNo());
+                order.setUserId(user.id());
+                order.setCourseId(course.id());
+                order.setCourseTitle(course.title());
+                order.setCourseSubtitle(course.subtitle());
+                order.setTeacherId(teacher == null ? null : teacher.id());
+                order.setTeacherName(teacher == null ? null : teacher.name());
+                order.setOriginalAmount(originalAmount);
+                order.setPayAmount(price);
+                order.setDiscountAmount(discountAmount);
+                order.setOrderStatus(OrderStatus.CREATED);
+                order.setPayStatus(PayStatus.UNPAID);
+                order.setPayType(PayType.MOCK);
+                order.setExpireTime(now.plusMinutes(30));
+                order.setRemark(trimToNull(request.remark()));
+                order.setCreatedAt(now);
+                order.setUpdatedAt(now);
+                orderMapper.insert(order);
+                appendLog(order, null, order.getOrderStatus(), null, order.getPayStatus(),
+                        OrderOperateType.CREATE_ORDER, user.id(), user.role(), "Create order");
+                rabbitTemplate.convertAndSend(
+                        MqConstants.ORDER_EXCHANGE,
+                        MqConstants.ORDER_TIMEOUT_DELAY_ROUTING_KEY,
+                        new OrderTimeoutMessage(order.getOrderNo(), order.getUserId(), order.getExpireTime())
+                );
+                stockReserved = false;
+                return toResponse(order);
+            } finally {
+                if (stockReserved) {
+                    restoreCourseStock(course.id());
+                }
+            }
         } finally {
             redisSubmitLock.release(lockKey, lockValue);
         }
@@ -175,6 +185,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setCancelTime(now);
         order.setUpdatedAt(now);
         orderMapper.updateById(order);
+        restoreCourseStock(order.getCourseId());
         appendLog(order, oldOrderStatus, order.getOrderStatus(), oldPayStatus, order.getPayStatus(),
                 OrderOperateType.USER_CANCEL, userId, UserRole.STUDENT, "User cancelled order");
         return toResponse(order);
@@ -320,6 +331,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setCancelTime(now);
         order.setUpdatedAt(now);
         orderMapper.updateById(order);
+        restoreCourseStock(order.getCourseId());
         appendLog(order, oldOrderStatus, order.getOrderStatus(), oldPayStatus, order.getPayStatus(),
                 OrderOperateType.SYSTEM_EXPIRE, order.getUserId(), UserRole.STUDENT, "Order expired");
     }
@@ -371,6 +383,42 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "Course is not on sale");
             }
             return course;
+        } catch (FeignException.NotFound exception) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Course does not exist");
+        }
+    }
+
+    private void requireNoActiveOrder(Long userId, Long courseId) {
+        Long count = orderMapper.selectCount(new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, userId)
+                .eq(Order::getCourseId, courseId)
+                .in(Order::getOrderStatus, List.of(OrderStatus.CREATED, OrderStatus.PAID)));
+        if (count != null && count > 0) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Course already has an active order");
+        }
+    }
+
+    private void decreaseCourseStock(Long courseId) {
+        try {
+            ApiResponse<Void> response = courseClient.decreaseStock(courseId);
+            if (response == null || response.code() != 200) {
+                throw new BusinessException(HttpStatus.BAD_GATEWAY, "Failed to reserve course stock");
+            }
+        } catch (FeignException.Conflict exception) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Course stock is sold out");
+        } catch (FeignException.BadRequest exception) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Course is not available");
+        } catch (FeignException.NotFound exception) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Course does not exist");
+        }
+    }
+
+    private void restoreCourseStock(Long courseId) {
+        try {
+            ApiResponse<Void> response = courseClient.restoreStock(courseId);
+            if (response == null || response.code() != 200) {
+                throw new BusinessException(HttpStatus.BAD_GATEWAY, "Failed to restore course stock");
+            }
         } catch (FeignException.NotFound exception) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Course does not exist");
         }
