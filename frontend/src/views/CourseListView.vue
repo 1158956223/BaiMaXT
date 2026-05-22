@@ -29,7 +29,7 @@
             <p>{{ course.subtitle || course.durationDesc || '课程信息待完善' }}</p>
             <div class="course-card-footer">
               <strong>{{ formatMoney(course.price) }}</strong>
-              <span>{{ course.teacher?.name || '暂无教师' }}</span>
+              <span>库存 {{ course.availableStock ?? 0 }}</span>
             </div>
           </div>
         </article>

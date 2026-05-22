@@ -25,6 +25,9 @@
       <el-table-column label="价格" width="120">
         <template #default="{ row }">{{ formatMoney(row.price) }}</template>
       </el-table-column>
+      <el-table-column label="库存" width="120">
+        <template #default="{ row }">{{ row.availableStock ?? 0 }} / {{ row.stock ?? 0 }}</template>
+      </el-table-column>
       <el-table-column label="状态" width="100">
         <template #default="{ row }">{{ courseStatusText[row.status] || row.status }}</template>
       </el-table-column>
@@ -76,6 +79,7 @@
         </el-form-item>
         <el-form-item label="价格"><el-input-number v-model="form.price" :precision="2" :min="0" /></el-form-item>
         <el-form-item label="原价"><el-input-number v-model="form.originalPrice" :precision="2" :min="0" /></el-form-item>
+        <el-form-item label="库存"><el-input-number v-model="form.stock" :min="0" /></el-form-item>
         <el-form-item label="课时描述"><el-input v-model="form.durationDesc" /></el-form-item>
         <el-form-item label="适合人群"><el-input v-model="form.targetAudience" /></el-form-item>
         <el-form-item label="课程介绍"><el-input v-model="form.intro" type="textarea" :rows="3" /></el-form-item>
@@ -119,6 +123,7 @@ const emptyForm = () => ({
   coverUrl: '',
   price: 0,
   originalPrice: 0,
+  stock: 0,
   courseType: 'ONLINE',
   durationDesc: '',
   targetAudience: '',
@@ -136,6 +141,7 @@ const resetForm = (data = emptyForm()) => {
     coverUrl: data.coverUrl,
     price: data.price,
     originalPrice: data.originalPrice,
+    stock: data.stock ?? 0,
     courseType: data.courseType,
     durationDesc: data.durationDesc,
     targetAudience: data.targetAudience,
@@ -153,6 +159,7 @@ const coursePayload = () => ({
   coverUrl: form.coverUrl,
   price: form.price,
   originalPrice: form.originalPrice,
+  stock: form.stock,
   courseType: form.courseType,
   durationDesc: form.durationDesc,
   targetAudience: form.targetAudience,
