@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.example.api.ApiResponse;
 import com.example.client.CourseClient;
 import com.example.client.CourseClient.CourseDetailClientResponse;
+import com.example.client.CourseClient.CourseListClientResponse;
 import com.example.client.CourseClient.TeacherClientResponse;
 import com.example.client.UserClient;
 import com.example.domain.dto.ConfirmPaymentRequest;
@@ -22,6 +23,9 @@ import com.example.domain.vo.OrderPaymentConfirmResponse;
 import com.example.domain.vo.OrderResponse;
 import com.example.domain.vo.OrderStatusLogResponse;
 import com.example.domain.vo.StudentCourseResponse;
+import com.example.domain.vo.TeacherCourseStatsResponse;
+import com.example.domain.vo.TeacherDashboardStatsResponse;
+import com.example.domain.vo.TeacherEnrollmentResponse;
 import com.example.dto.user.UserProfileResponse;
 import com.example.enums.UserRole;
 import com.example.enums.UserStatus;
@@ -39,7 +43,11 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.Map;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
@@ -52,6 +60,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private static final DateTimeFormatter ORDER_NO_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final Duration SUBMIT_LOCK_TTL = Duration.ofSeconds(10);
     private static final String ORDER_SUBMIT_LOCK_PREFIX = "baimaxt:order:submit:";
+    private static final String TEACHER_ROLE = "TEACHER";
 
     private final OrderMapper orderMapper;
     private final OrderStatusLogMapper statusLogMapper;
@@ -166,6 +175,62 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 .stream()
                 .map(this::toStudentCourseResponse)
                 .toList();
+    }
+
+    @Override
+    public List<TeacherEnrollmentResponse> listTeacherEnrollments(Long userId, Long courseId) {
+        TeacherClientResponse teacher = requireTeacherProfile(userId);
+        LambdaQueryWrapper<Order> query = new LambdaQueryWrapper<Order>()
+                .eq(Order::getTeacherId, teacher.id())
+                .eq(Order::getOrderStatus, OrderStatus.PAID)
+                .eq(Order::getPayStatus, PayStatus.PAID)
+                .orderByDesc(Order::getPayTime)
+                .orderByDesc(Order::getId);
+        if (courseId != null) {
+            query.eq(Order::getCourseId, courseId);
+        }
+        return orderMapper.selectList(query).stream()
+                .map(this::toTeacherEnrollmentResponse)
+                .toList();
+    }
+
+    @Override
+    public TeacherDashboardStatsResponse getTeacherDashboardStats(Long userId) {
+        TeacherClientResponse teacher = requireTeacherProfile(userId);
+        List<CourseListClientResponse> courses = listTeacherCourses(userId);
+        List<Order> paidOrders = orderMapper.selectList(new LambdaQueryWrapper<Order>()
+                .eq(Order::getTeacherId, teacher.id())
+                .eq(Order::getOrderStatus, OrderStatus.PAID)
+                .eq(Order::getPayStatus, PayStatus.PAID));
+        Map<Long, List<Order>> ordersByCourse = paidOrders.stream()
+                .collect(Collectors.groupingBy(Order::getCourseId));
+        List<TeacherCourseStatsResponse> courseStats = courses.stream()
+                .map(course -> toTeacherCourseStatsResponse(course, ordersByCourse.getOrDefault(course.id(), Collections.emptyList())))
+                .toList();
+        Set<Long> studentIds = paidOrders.stream()
+                .map(Order::getUserId)
+                .collect(Collectors.toSet());
+        BigDecimal revenue = paidOrders.stream()
+                .map(Order::getPayAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        int onSaleCourses = (int) courses.stream()
+                .filter(course -> "ON_SALE".equals(course.status()))
+                .count();
+        int availableStock = courses.stream()
+                .map(CourseListClientResponse::availableStock)
+                .filter(stock -> stock != null)
+                .reduce(0, Integer::sum);
+        return new TeacherDashboardStatsResponse(
+                teacher.id(),
+                courses.size(),
+                onSaleCourses,
+                (long) paidOrders.size(),
+                (long) studentIds.size(),
+                availableStock,
+                revenue,
+                courseStats
+        );
     }
 
     @Override
@@ -403,6 +468,52 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
     }
 
+    private TeacherClientResponse requireTeacherProfile(Long userId) {
+        UserProfileResponse user = requireEnabledUser(userId);
+        if (user.role() != UserRole.TEACHER) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Teacher permission required");
+        }
+        try {
+            ApiResponse<TeacherClientResponse> response = courseClient.getTeacherByUserId(user.id());
+            if (response == null || response.code() != 200 || response.data() == null) {
+                throw new BusinessException(HttpStatus.BAD_GATEWAY, "Failed to get teacher profile");
+            }
+            return response.data();
+        } catch (FeignException.NotFound exception) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Teacher profile does not exist");
+        }
+    }
+
+    private List<CourseListClientResponse> listTeacherCourses(Long userId) {
+        try {
+            ApiResponse<List<CourseListClientResponse>> response = courseClient.listTeacherCourses(userId, TEACHER_ROLE);
+            if (response == null || response.code() != 200 || response.data() == null) {
+                throw new BusinessException(HttpStatus.BAD_GATEWAY, "Failed to get teacher courses");
+            }
+            return response.data();
+        } catch (FeignException.Forbidden exception) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Teacher permission required");
+        }
+    }
+
+    private String studentDisplayName(Long userId) {
+        try {
+            ApiResponse<UserProfileResponse> response = userClient.getInternal(userId);
+            if (response == null || response.code() != 200 || response.data() == null) {
+                return "User " + userId;
+            }
+            UserProfileResponse user = response.data();
+            String username = trimToNull(user.username());
+            if (username != null) {
+                return username;
+            }
+            String nickname = trimToNull(user.nickname());
+            return nickname == null ? "User " + userId : nickname;
+        } catch (FeignException exception) {
+            return "User " + userId;
+        }
+    }
+
     private void requireNoActiveOrder(Long userId, Long courseId) {
         Long count = orderMapper.selectCount(new LambdaQueryWrapper<Order>()
                 .eq(Order::getUserId, userId)
@@ -562,6 +673,38 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 order.getPayAmount(),
                 order.getPayTime(),
                 order.getCreatedAt()
+        );
+    }
+
+    private TeacherEnrollmentResponse toTeacherEnrollmentResponse(Order order) {
+        return new TeacherEnrollmentResponse(
+                order.getId(),
+                order.getOrderNo(),
+                order.getUserId(),
+                studentDisplayName(order.getUserId()),
+                order.getCourseId(),
+                order.getCourseTitle(),
+                order.getCourseSubtitle(),
+                order.getPayAmount(),
+                order.getPayTime(),
+                order.getCreatedAt()
+        );
+    }
+
+    private TeacherCourseStatsResponse toTeacherCourseStatsResponse(CourseListClientResponse course, List<Order> paidOrders) {
+        BigDecimal revenue = paidOrders.stream()
+                .map(Order::getPayAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new TeacherCourseStatsResponse(
+                course.id(),
+                course.title(),
+                course.subtitle(),
+                course.stock(),
+                course.soldCount(),
+                course.availableStock(),
+                (long) paidOrders.size(),
+                revenue
         );
     }
 

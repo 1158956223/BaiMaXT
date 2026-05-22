@@ -5,7 +5,7 @@
         <h1>我的账号</h1>
         <p>当前登录账号和基础资料。</p>
       </div>
-      <el-button type="primary" @click="$router.push('/orders')">查看我的订单</el-button>
+      <el-button v-if="auth.user?.role === 'STUDENT'" type="primary" @click="$router.push('/orders')">查看我的订单</el-button>
     </div>
     <el-descriptions v-if="auth.user" :column="1" border>
       <el-descriptions-item label="用户 ID">{{ auth.currentUserId || '-' }}</el-descriptions-item>

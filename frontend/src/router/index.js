@@ -38,9 +38,9 @@ const router = createRouter({
         { path: 'my-courses', component: MyCoursesView, meta: { requiresAuth: true, requiresStudent: true } },
         { path: 'teacher/courses', component: TeacherCoursesView, meta: { requiresAuth: true, requiresTeacher: true } },
         { path: 'profile', component: ProfileView, meta: { requiresAuth: true } },
-        { path: 'orders', component: OrderListView, meta: { requiresAuth: true } },
-        { path: 'orders/:id', component: OrderDetailView, meta: { requiresAuth: true } },
-        { path: 'payments/:payNo', component: PaymentView, meta: { requiresAuth: true } },
+        { path: 'orders', component: OrderListView, meta: { requiresAuth: true, requiresStudent: true } },
+        { path: 'orders/:id', component: OrderDetailView, meta: { requiresAuth: true, requiresStudent: true } },
+        { path: 'payments/:payNo', component: PaymentView, meta: { requiresAuth: true, requiresStudent: true } },
         { path: 'ai', component: AiView }
       ]
     },

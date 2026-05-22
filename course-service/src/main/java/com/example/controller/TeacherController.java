@@ -51,6 +51,11 @@ public class TeacherController {
         return ApiResponse.success(teacherService.createInternal(request));
     }
 
+    @GetMapping("/internal/by-user/{userId}")
+    public ApiResponse<TeacherResponse> getByUserId(@PathVariable Long userId) {
+        return ApiResponse.success(teacherService.getByUserId(userId));
+    }
+
     @PutMapping("/admin/{id}")
     public ApiResponse<TeacherResponse> update(@PathVariable Long id, @RequestBody TeacherRequest request) {
         return ApiResponse.success(teacherService.update(id, request));

@@ -16,6 +16,8 @@ public interface TeacherService extends IService<Teacher> {
 
     TeacherResponse getDetail(Long id);
 
+    TeacherResponse getByUserId(Long userId);
+
     TeacherResponse create(TeacherRequest request);
 
     TeacherProfileResponse createInternal(CreateTeacherProfileRequest request);

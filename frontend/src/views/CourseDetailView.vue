@@ -18,8 +18,8 @@
               <span>教师：{{ course.teacher?.name || '待定' }}</span>
               <span>库存：{{ course.availableStock ?? 0 }} / {{ course.stock ?? 0 }}</span>
             </div>
-            <el-button type="primary" size="large" :loading="ordering" :disabled="isSoldOut" @click="submitOrder">
-              {{ isSoldOut ? '已售罄' : '立即报课' }}
+            <el-button type="primary" size="large" :loading="ordering" :disabled="isSoldOut || !canEnroll" @click="submitOrder">
+              {{ actionText }}
             </el-button>
           </div>
         </div>
@@ -73,10 +73,20 @@ const ordering = ref(false)
 const fallbackCover = 'https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format&fit=crop&w=1000&q=80'
 const fallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80'
 const isSoldOut = computed(() => (course.value?.availableStock ?? 0) <= 0)
+const canEnroll = computed(() => !auth.token || auth.user?.role === 'STUDENT')
+const actionText = computed(() => {
+  if (isSoldOut.value) return '已售罄'
+  if (!canEnroll.value) return '仅学生可报名'
+  return '立即报课'
+})
 
 const submitOrder = async () => {
   if (isSoldOut.value) {
     ElMessage.warning('课程库存不足')
+    return
+  }
+  if (!canEnroll.value) {
+    ElMessage.warning('只有学生账号可以报名课程')
     return
   }
   if (!auth.token) {

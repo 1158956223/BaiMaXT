@@ -57,6 +57,20 @@ public class TeacherServiceImpl extends ServiceImpl<TeacherMapper, Teacher> impl
     }
 
     @Override
+    public TeacherResponse getByUserId(Long userId) {
+        if (userId == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "User id must not be null");
+        }
+        Teacher teacher = teacherMapper.selectOne(new LambdaQueryWrapper<Teacher>()
+                .eq(Teacher::getUserId, userId)
+                .last("limit 1"));
+        if (teacher == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND, "Teacher profile does not exist");
+        }
+        return toResponse(teacher);
+    }
+
+    @Override
     @CacheEvict(cacheNames = {COURSE_PUBLIC_LIST_CACHE, COURSE_PUBLIC_DETAIL_CACHE, COURSE_CATEGORY_ENABLED_CACHE, COURSE_TEACHER_ENABLED_CACHE}, allEntries = true)
     public TeacherResponse create(TeacherRequest request) {
         if (request == null) {
