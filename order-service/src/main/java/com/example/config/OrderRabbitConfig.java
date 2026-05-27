@@ -67,6 +67,11 @@ public class OrderRabbitConfig {
     }
 
     @Bean
+    public Queue orderCreateQueue() {
+        return QueueBuilder.durable(MqConstants.ORDER_CREATE_QUEUE).build();
+    }
+
+    @Bean
     public Queue orderPaymentSuccessQueue() {
         return QueueBuilder.durable(MqConstants.ORDER_PAYMENT_SUCCESS_QUEUE).build();
     }
@@ -85,6 +90,14 @@ public class OrderRabbitConfig {
         return BindingBuilder.bind(orderTimeoutCloseQueue)
                 .to(orderExchange)
                 .with(MqConstants.ORDER_TIMEOUT_CLOSE_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding orderCreateBinding(@Qualifier("orderCreateQueue") Queue orderCreateQueue,
+                                      @Qualifier("orderExchange") DirectExchange orderExchange) {
+        return BindingBuilder.bind(orderCreateQueue)
+                .to(orderExchange)
+                .with(MqConstants.ORDER_CREATE_ROUTING_KEY);
     }
 
     @Bean

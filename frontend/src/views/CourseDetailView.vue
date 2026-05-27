@@ -60,7 +60,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getCourse } from '../api/courses'
-import { createOrder } from '../api/orders'
+import { createOrder, getOrderSubmitResult } from '../api/orders'
 import { useAuthStore } from '../stores/auth'
 import { courseTypeText, formatMoney } from '../utils/format'
 
@@ -104,12 +104,47 @@ const submitOrder = async () => {
       courseId: Number(route.params.id),
       remark: ''
     })
-    ElMessage.success('报课订单已创建')
-    router.push(`/orders/${order.id}`)
+    if (order.status === 'QUEUEING') {
+      ElMessage.info('订单排队中，请稍候')
+      await pollOrderSubmitResult(order.requestId)
+      return
+    }
+    handleOrderSubmitResult(order)
   } finally {
     ordering.value = false
   }
 }
+
+const pollOrderSubmitResult = async (requestId) => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await sleep(1000)
+    const result = await getOrderSubmitResult(requestId)
+    if (result.status !== 'QUEUEING') {
+      handleOrderSubmitResult(result)
+      return
+    }
+  }
+  ElMessage.warning('订单仍在排队中，请稍后到我的订单查看')
+}
+
+const handleOrderSubmitResult = (result) => {
+  if (result.status === 'SUCCESS' && result.orderId) {
+    ElMessage.success('报课订单已创建')
+    router.push(`/orders/${result.orderId}`)
+    return
+  }
+  if (result.status === 'SOLD_OUT') {
+    ElMessage.warning(result.message || '课程库存不足')
+    return
+  }
+  if (result.status === 'DUPLICATE') {
+    ElMessage.warning(result.message || '课程已有待支付或已支付订单')
+    return
+  }
+  ElMessage.error(result.message || '订单创建失败，请稍后重试')
+}
+
+const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
 
 onMounted(async () => {
   loading.value = true

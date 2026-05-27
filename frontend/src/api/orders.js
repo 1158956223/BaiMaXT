@@ -1,6 +1,7 @@
 import request from './request'
 
 export const createOrder = (data) => request.post('/orders', data)
+export const getOrderSubmitResult = (requestId) => request.get(`/orders/submit-results/${requestId}`)
 export const listMyOrders = (userId) => request.get('/orders/my', { params: { userId } })
 export const listMyCourses = (userId) => request.get('/orders/my-courses', { params: { userId } })
 export const listTeacherEnrollments = (params) => request.get('/orders/teacher/enrollments', { params })

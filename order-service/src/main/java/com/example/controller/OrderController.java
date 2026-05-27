@@ -9,6 +9,7 @@ import com.example.domain.vo.OrderDetailResponse;
 import com.example.domain.vo.OrderPayableResponse;
 import com.example.domain.vo.OrderPaymentConfirmResponse;
 import com.example.domain.vo.OrderResponse;
+import com.example.domain.vo.OrderSubmitResponse;
 import com.example.domain.vo.StudentCourseResponse;
 import com.example.domain.vo.TeacherDashboardStatsResponse;
 import com.example.domain.vo.TeacherEnrollmentResponse;
@@ -37,8 +38,13 @@ public class OrderController {
     }
 
     @PostMapping
-    public ApiResponse<OrderResponse> create(@RequestBody CreateOrderRequest request) {
+    public ApiResponse<OrderSubmitResponse> create(@RequestBody CreateOrderRequest request) {
         return ApiResponse.success(orderService.create(request));
+    }
+
+    @GetMapping("/submit-results/{requestId}")
+    public ApiResponse<OrderSubmitResponse> getSubmitResult(@PathVariable String requestId) {
+        return ApiResponse.success(orderService.getSubmitResult(requestId));
     }
 
     @GetMapping("/my")

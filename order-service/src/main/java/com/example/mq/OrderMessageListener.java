@@ -19,6 +19,16 @@ public class OrderMessageListener {
         this.orderService = orderService;
     }
 
+    @RabbitListener(queues = MqConstants.ORDER_CREATE_QUEUE)
+    public void handleOrderCreate(OrderCreateMessage message) {
+        try {
+            orderService.createFromQueue(message);
+        } catch (BusinessException exception) {
+            log.warn("Reject invalid order create message: {}", message, exception);
+            throw new AmqpRejectAndDontRequeueException(exception);
+        }
+    }
+
     @RabbitListener(queues = MqConstants.ORDER_TIMEOUT_CLOSE_QUEUE)
     public void handleOrderTimeout(OrderTimeoutMessage message) {
         try {

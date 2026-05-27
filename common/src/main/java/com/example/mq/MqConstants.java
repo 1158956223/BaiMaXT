@@ -8,9 +8,11 @@ public final class MqConstants {
 
     public static final String ORDER_TIMEOUT_DELAY_QUEUE = "order.timeout.delay.queue";
     public static final String ORDER_TIMEOUT_CLOSE_QUEUE = "order.timeout.close.queue";
+    public static final String ORDER_CREATE_QUEUE = "order.create.queue";
     public static final String ORDER_PAYMENT_SUCCESS_QUEUE = "order.payment.success.queue";
     public static final String SEARCH_COURSE_INDEX_QUEUE = "search.course.index.queue";
 
+    public static final String ORDER_CREATE_ROUTING_KEY = "order.create";
     public static final String ORDER_TIMEOUT_DELAY_ROUTING_KEY = "order.timeout.delay";
     public static final String ORDER_TIMEOUT_CLOSE_ROUTING_KEY = "order.timeout.close";
     public static final String PAYMENT_SUCCESS_ROUTING_KEY = "payment.success";

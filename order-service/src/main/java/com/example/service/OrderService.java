@@ -8,16 +8,22 @@ import com.example.domain.vo.OrderDetailResponse;
 import com.example.domain.vo.OrderPayableResponse;
 import com.example.domain.vo.OrderPaymentConfirmResponse;
 import com.example.domain.vo.OrderResponse;
+import com.example.domain.vo.OrderSubmitResponse;
 import com.example.domain.vo.StudentCourseResponse;
 import com.example.domain.vo.TeacherDashboardStatsResponse;
 import com.example.domain.vo.TeacherEnrollmentResponse;
+import com.example.mq.OrderCreateMessage;
 import com.example.mq.OrderTimeoutMessage;
 import com.example.mq.PaymentSuccessMessage;
 import java.util.List;
 
 public interface OrderService {
 
-    OrderResponse create(CreateOrderRequest request);
+    OrderSubmitResponse create(CreateOrderRequest request);
+
+    OrderSubmitResponse getSubmitResult(String requestId);
+
+    void createFromQueue(OrderCreateMessage message);
 
     List<OrderResponse> listMine(Long userId);
 

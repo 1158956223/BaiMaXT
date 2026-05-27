@@ -13,6 +13,7 @@ import com.example.domain.dto.CreateOrderRequest;
 import com.example.domain.enums.OrderCourseStatus;
 import com.example.domain.enums.OrderOperateType;
 import com.example.domain.enums.OrderStatus;
+import com.example.domain.enums.OrderSubmitStatus;
 import com.example.domain.enums.PayStatus;
 import com.example.domain.enums.PayType;
 import com.example.domain.po.Order;
@@ -21,6 +22,7 @@ import com.example.domain.vo.OrderDetailResponse;
 import com.example.domain.vo.OrderPayableResponse;
 import com.example.domain.vo.OrderPaymentConfirmResponse;
 import com.example.domain.vo.OrderResponse;
+import com.example.domain.vo.OrderSubmitResponse;
 import com.example.domain.vo.OrderStatusLogResponse;
 import com.example.domain.vo.StudentCourseResponse;
 import com.example.domain.vo.TeacherCourseStatsResponse;
@@ -33,9 +35,11 @@ import com.example.exception.BusinessException;
 import com.example.mapper.OrderMapper;
 import com.example.mapper.OrderStatusLogMapper;
 import com.example.mq.MqConstants;
+import com.example.mq.OrderCreateMessage;
 import com.example.mq.OrderTimeoutMessage;
 import com.example.mq.PaymentSuccessMessage;
 import com.example.service.OrderService;
+import com.example.support.RedisCourseStockGuard;
 import com.example.support.RedisSubmitLock;
 import feign.FeignException;
 import java.math.BigDecimal;
@@ -47,6 +51,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -68,24 +73,26 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final CourseClient courseClient;
     private final RabbitTemplate rabbitTemplate;
     private final RedisSubmitLock redisSubmitLock;
+    private final RedisCourseStockGuard redisCourseStockGuard;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             OrderStatusLogMapper statusLogMapper,
                             UserClient userClient,
                             CourseClient courseClient,
                             RabbitTemplate rabbitTemplate,
-                            RedisSubmitLock redisSubmitLock) {
+                            RedisSubmitLock redisSubmitLock,
+                            RedisCourseStockGuard redisCourseStockGuard) {
         this.orderMapper = orderMapper;
         this.statusLogMapper = statusLogMapper;
         this.userClient = userClient;
         this.courseClient = courseClient;
         this.rabbitTemplate = rabbitTemplate;
         this.redisSubmitLock = redisSubmitLock;
+        this.redisCourseStockGuard = redisCourseStockGuard;
     }
 
     @Override
-    @Transactional
-    public OrderResponse create(CreateOrderRequest request) {
+    public OrderSubmitResponse create(CreateOrderRequest request) {
         if (request == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Request body must not be null");
         }
@@ -104,50 +111,93 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             UserProfileResponse user = requireEnabledUser(request.userId());
             CourseDetailClientResponse course = requireOnSaleCourse(request.courseId());
             requireNoActiveOrder(user.id(), course.id());
-            decreaseCourseStock(course.id());
-            boolean stockReserved = true;
+            String requestId = UUID.randomUUID().toString();
+            OrderSubmitStatus reserveStatus = redisCourseStockGuard.reserve(
+                    course.id(),
+                    user.id(),
+                    requestId,
+                    course.availableStock()
+            );
+            if (reserveStatus != OrderSubmitStatus.QUEUEING) {
+                return new OrderSubmitResponse(requestId, reserveStatus, null, null, submitStatusMessage(reserveStatus));
+            }
             try {
-                LocalDateTime now = LocalDateTime.now();
-                BigDecimal price = requireMoney(course.price());
-                BigDecimal originalAmount = course.originalPrice() == null ? price : course.originalPrice();
-                BigDecimal discountAmount = originalAmount.compareTo(price) > 0 ? originalAmount.subtract(price) : BigDecimal.ZERO;
-                TeacherClientResponse teacher = course.teacher();
-
-                Order order = new Order();
-                order.setOrderNo(generateOrderNo());
-                order.setUserId(user.id());
-                order.setCourseId(course.id());
-                order.setCourseTitle(course.title());
-                order.setCourseSubtitle(course.subtitle());
-                order.setTeacherId(teacher == null ? null : teacher.id());
-                order.setTeacherName(teacher == null ? null : teacher.name());
-                order.setOriginalAmount(originalAmount);
-                order.setPayAmount(price);
-                order.setDiscountAmount(discountAmount);
-                order.setOrderStatus(OrderStatus.CREATED);
-                order.setPayStatus(PayStatus.UNPAID);
-                order.setPayType(PayType.MOCK);
-                order.setExpireTime(now.plusMinutes(30));
-                order.setRemark(trimToNull(request.remark()));
-                order.setCreatedAt(now);
-                order.setUpdatedAt(now);
-                orderMapper.insert(order);
-                appendLog(order, null, order.getOrderStatus(), null, order.getPayStatus(),
-                        OrderOperateType.CREATE_ORDER, user.id(), user.role(), "Create order");
                 rabbitTemplate.convertAndSend(
                         MqConstants.ORDER_EXCHANGE,
-                        MqConstants.ORDER_TIMEOUT_DELAY_ROUTING_KEY,
-                        new OrderTimeoutMessage(order.getOrderNo(), order.getUserId(), order.getExpireTime())
+                        MqConstants.ORDER_CREATE_ROUTING_KEY,
+                        new OrderCreateMessage(requestId, user.id(), course.id(), request.remark())
                 );
-                stockReserved = false;
-                return toResponse(order);
-            } finally {
-                if (stockReserved) {
-                    restoreCourseStock(course.id());
-                }
+                return new OrderSubmitResponse(requestId, OrderSubmitStatus.QUEUEING, null, null, "Order is queueing");
+            } catch (RuntimeException exception) {
+                redisCourseStockGuard.releaseReservation(course.id(), user.id());
+                redisCourseStockGuard.markFailure(requestId, OrderSubmitStatus.FAILED, "Failed to queue order");
+                throw exception;
             }
         } finally {
             redisSubmitLock.release(lockKey, lockValue);
+        }
+    }
+
+    @Override
+    public OrderSubmitResponse getSubmitResult(String requestId) {
+        String value = trimToNull(requestId);
+        if (value == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Request id must not be blank");
+        }
+        return redisCourseStockGuard.getResult(value);
+    }
+
+    @Override
+    @Transactional
+    public void createFromQueue(OrderCreateMessage message) {
+        if (message == null || trimToNull(message.requestId()) == null
+                || message.userId() == null || message.courseId() == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Order create message is invalid");
+        }
+        OrderSubmitResponse current = redisCourseStockGuard.getResult(message.requestId());
+        if (current.status() == OrderSubmitStatus.SUCCESS) {
+            return;
+        }
+        boolean dbStockReserved = false;
+        try {
+            UserProfileResponse user = requireEnabledUser(message.userId());
+            CourseDetailClientResponse course = requireOnSaleCourse(message.courseId());
+            Order activeOrder = findActiveOrder(user.id(), course.id());
+            if (activeOrder != null) {
+                redisCourseStockGuard.releaseReservation(course.id(), user.id());
+                redisCourseStockGuard.markSuccess(message.requestId(), activeOrder.getId(), activeOrder.getOrderNo());
+                return;
+            }
+            decreaseCourseStock(course.id());
+            dbStockReserved = true;
+            Order order = buildOrder(user, course, message.remark());
+            orderMapper.insert(order);
+            appendLog(order, null, order.getOrderStatus(), null, order.getPayStatus(),
+                    OrderOperateType.CREATE_ORDER, user.id(), user.role(), "Create order");
+            rabbitTemplate.convertAndSend(
+                    MqConstants.ORDER_EXCHANGE,
+                    MqConstants.ORDER_TIMEOUT_DELAY_ROUTING_KEY,
+                    new OrderTimeoutMessage(order.getOrderNo(), order.getUserId(), order.getExpireTime())
+            );
+            redisCourseStockGuard.markSuccess(message.requestId(), order.getId(), order.getOrderNo());
+        } catch (BusinessException exception) {
+            if (dbStockReserved) {
+                restoreCourseStock(message.courseId(), message.userId());
+            } else if (exception.getStatus() == HttpStatus.CONFLICT) {
+                redisCourseStockGuard.markSoldOut(message.courseId(), message.userId());
+            } else {
+                redisCourseStockGuard.releaseReservation(message.courseId(), message.userId());
+            }
+            redisCourseStockGuard.markFailure(message.requestId(), failureStatus(exception), exception.getMessage());
+            throw exception;
+        } catch (RuntimeException exception) {
+            if (dbStockReserved) {
+                restoreCourseStock(message.courseId(), message.userId());
+            } else {
+                redisCourseStockGuard.releaseReservation(message.courseId(), message.userId());
+            }
+            redisCourseStockGuard.markFailure(message.requestId(), OrderSubmitStatus.FAILED, "Failed to create order");
+            throw exception;
         }
     }
 
@@ -265,7 +315,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setCancelTime(now);
         order.setUpdatedAt(now);
         orderMapper.updateById(order);
-        restoreCourseStock(order.getCourseId());
+        restoreCourseStock(order.getCourseId(), order.getUserId());
         appendLog(order, oldOrderStatus, order.getOrderStatus(), oldPayStatus, order.getPayStatus(),
                 OrderOperateType.USER_CANCEL, userId, UserRole.STUDENT, "User cancelled order");
         return toResponse(order);
@@ -411,7 +461,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setCancelTime(now);
         order.setUpdatedAt(now);
         orderMapper.updateById(order);
-        restoreCourseStock(order.getCourseId());
+        restoreCourseStock(order.getCourseId(), order.getUserId());
         appendLog(order, oldOrderStatus, order.getOrderStatus(), oldPayStatus, order.getPayStatus(),
                 OrderOperateType.SYSTEM_EXPIRE, order.getUserId(), UserRole.STUDENT, "Order expired");
     }
@@ -515,13 +565,45 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     private void requireNoActiveOrder(Long userId, Long courseId) {
-        Long count = orderMapper.selectCount(new LambdaQueryWrapper<Order>()
-                .eq(Order::getUserId, userId)
-                .eq(Order::getCourseId, courseId)
-                .in(Order::getOrderStatus, List.of(OrderStatus.CREATED, OrderStatus.PAID)));
-        if (count != null && count > 0) {
+        if (findActiveOrder(userId, courseId) != null) {
             throw new BusinessException(HttpStatus.CONFLICT, "Course already has an active order");
         }
+    }
+
+    private Order findActiveOrder(Long userId, Long courseId) {
+        return orderMapper.selectOne(new LambdaQueryWrapper<Order>()
+                .eq(Order::getUserId, userId)
+                .eq(Order::getCourseId, courseId)
+                .in(Order::getOrderStatus, List.of(OrderStatus.CREATED, OrderStatus.PAID))
+                .last("LIMIT 1"));
+    }
+
+    private Order buildOrder(UserProfileResponse user, CourseDetailClientResponse course, String remark) {
+        LocalDateTime now = LocalDateTime.now();
+        BigDecimal price = requireMoney(course.price());
+        BigDecimal originalAmount = course.originalPrice() == null ? price : course.originalPrice();
+        BigDecimal discountAmount = originalAmount.compareTo(price) > 0 ? originalAmount.subtract(price) : BigDecimal.ZERO;
+        TeacherClientResponse teacher = course.teacher();
+
+        Order order = new Order();
+        order.setOrderNo(generateOrderNo());
+        order.setUserId(user.id());
+        order.setCourseId(course.id());
+        order.setCourseTitle(course.title());
+        order.setCourseSubtitle(course.subtitle());
+        order.setTeacherId(teacher == null ? null : teacher.id());
+        order.setTeacherName(teacher == null ? null : teacher.name());
+        order.setOriginalAmount(originalAmount);
+        order.setPayAmount(price);
+        order.setDiscountAmount(discountAmount);
+        order.setOrderStatus(OrderStatus.CREATED);
+        order.setPayStatus(PayStatus.UNPAID);
+        order.setPayType(PayType.MOCK);
+        order.setExpireTime(now.plusMinutes(30));
+        order.setRemark(trimToNull(remark));
+        order.setCreatedAt(now);
+        order.setUpdatedAt(now);
+        return order;
     }
 
     private void decreaseCourseStock(Long courseId) {
@@ -539,15 +621,36 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
     }
 
-    private void restoreCourseStock(Long courseId) {
+    private void restoreCourseStock(Long courseId, Long userId) {
         try {
             ApiResponse<Void> response = courseClient.restoreStock(courseId);
             if (response == null || response.code() != 200) {
                 throw new BusinessException(HttpStatus.BAD_GATEWAY, "Failed to restore course stock");
             }
+            redisCourseStockGuard.restoreAvailableStock(courseId);
+            if (userId != null) {
+                redisCourseStockGuard.removeBuyer(courseId, userId);
+            }
         } catch (FeignException.NotFound exception) {
             throw new BusinessException(HttpStatus.NOT_FOUND, "Course does not exist");
         }
+    }
+
+    private OrderSubmitStatus failureStatus(BusinessException exception) {
+        if (exception.getStatus() == HttpStatus.CONFLICT) {
+            return OrderSubmitStatus.SOLD_OUT;
+        }
+        return OrderSubmitStatus.FAILED;
+    }
+
+    private String submitStatusMessage(OrderSubmitStatus status) {
+        return switch (status) {
+            case QUEUEING -> "Order is queueing";
+            case SUCCESS -> "Order created";
+            case SOLD_OUT -> "Course stock is sold out";
+            case DUPLICATE -> "Course already has an active order";
+            case FAILED -> "Failed to submit order";
+        };
     }
 
     private Order getOrder(Long id) {
