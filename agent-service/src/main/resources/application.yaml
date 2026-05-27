@@ -1,0 +1,18 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: agent-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+
+agent:
+  python:
+    base-url: http://localhost:8000
+
+auth:
+  jwt:
+    secret: BaiMaXT-auth-service-dev-secret-change-me-2026
