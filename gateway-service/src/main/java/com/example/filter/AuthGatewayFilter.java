@@ -1,7 +1,7 @@
 package com.example.filter;
 
 import com.example.auth.JwtPayload;
-import com.example.auth.JwtValidator;
+import com.example.auth.JwtTool;
 import com.example.auth.TokenStateService;
 import com.example.support.GatewayResponseWriter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -20,14 +20,14 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String ADMIN_ROLE = "ADMIN";
 
-    private final JwtValidator jwtValidator;
+    private final JwtTool jwtTool;
     private final TokenStateService tokenStateService;
     private final GatewayResponseWriter responseWriter;
 
-    public AuthGatewayFilter(JwtValidator jwtValidator,
+    public AuthGatewayFilter(JwtTool jwtTool,
                              TokenStateService tokenStateService,
                              GatewayResponseWriter responseWriter) {
-        this.jwtValidator = jwtValidator;
+        this.jwtTool = jwtTool;
         this.tokenStateService = tokenStateService;
         this.responseWriter = responseWriter;
     }
@@ -51,7 +51,7 @@ public class AuthGatewayFilter implements GlobalFilter, Ordered {
 
         JwtPayload payload;
         try {
-            payload = jwtValidator.validate(token);
+            payload = jwtTool.validate(token);
         } catch (IllegalArgumentException exception) {
             return responseWriter.write(exchange, HttpStatus.UNAUTHORIZED, "Invalid or missing token");
         }

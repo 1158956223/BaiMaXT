@@ -1,8 +1,8 @@
-package com.example.tool;
+package com.example.auth;
 
+import com.example.enums.UserRole;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.example.enums.UserRole;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -21,6 +21,7 @@ public class JwtTool {
     private static final String HMAC_SHA256 = "HmacSHA256";
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
+
     private final ObjectMapper objectMapper;
     private final String secret;
     @Getter
@@ -29,7 +30,7 @@ public class JwtTool {
     public JwtTool(
             ObjectMapper objectMapper,
             @Value("${auth.jwt.secret}") String secret,
-            @Value("${auth.jwt.expiration-seconds}") long expirationSeconds
+            @Value("${auth.jwt.expiration-seconds:3600}") long expirationSeconds
     ) {
         this.objectMapper = objectMapper;
         this.secret = secret;
@@ -59,6 +60,18 @@ public class JwtTool {
         }
     }
 
+    public JwtPayload validate(String token) {
+        Map<String, Object> payload = parseToken(token);
+        return new JwtPayload(
+                getLong(payload, "accountId"),
+                getLong(payload, "userId"),
+                requireString(payload, "username"),
+                requireString(payload, "role"),
+                requireString(payload, "jti"),
+                getLong(payload, "exp")
+        );
+    }
+
     public Map<String, Object> parseToken(String token) {
         try {
             String[] parts = token.split("\\.");
@@ -74,7 +87,7 @@ public class JwtTool {
                     new TypeReference<>() {
                     }
             );
-            long exp = asLong(payload.get("exp"));
+            long exp = getLong(payload, "exp");
             if (Instant.now().getEpochSecond() >= exp) {
                 throw new IllegalArgumentException("Token expired");
             }
@@ -85,12 +98,27 @@ public class JwtTool {
     }
 
     public Long getLong(Map<String, Object> payload, String key) {
-        return asLong(payload.get(key));
+        Object value = payload.get(key);
+        if (value == null) {
+            throw new IllegalArgumentException("Missing number claim");
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return Long.parseLong(value.toString());
     }
 
     public String getString(Map<String, Object> payload, String key) {
         Object value = payload.get(key);
         return value == null ? null : value.toString();
+    }
+
+    private String requireString(Map<String, Object> payload, String key) {
+        String value = getString(payload, key);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Missing string claim");
+        }
+        return value;
     }
 
     private String encodeJson(Map<String, Object> value) throws Exception {
@@ -101,13 +129,6 @@ public class JwtTool {
         Mac mac = Mac.getInstance(HMAC_SHA256);
         mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_SHA256));
         return URL_ENCODER.encodeToString(mac.doFinal(unsigned.getBytes(StandardCharsets.UTF_8)));
-    }
-
-    private long asLong(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        return Long.parseLong(value.toString());
     }
 
     private boolean constantTimeEquals(String expected, String actual) {

@@ -19,7 +19,7 @@ import com.example.exception.BusinessException;
 import com.example.mapper.AuthAccountMapper;
 import com.example.service.AuthService;
 import com.example.service.TokenSessionService;
-import com.example.tool.JwtTool;
+import com.example.auth.JwtTool;
 import feign.FeignException;
 import java.time.LocalDateTime;
 import java.util.Map;
