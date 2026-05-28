@@ -19,6 +19,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RestClientException.class)
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
     public ApiResponse<Void> handleAgentUnavailable(RestClientException exception) {
+        System.out.println(exception.getMessage());
         return ApiResponse.fail(HttpStatus.BAD_GATEWAY.value(), "Python agent service unavailable");
     }
 }

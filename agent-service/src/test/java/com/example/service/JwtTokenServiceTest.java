@@ -1,6 +1,7 @@
 package com.example.service;
 
 import com.example.auth.JwtTool;
+import com.example.service.impl.JwtTokenServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -18,7 +19,7 @@ class JwtTokenServiceTest {
 
     private static final String SECRET = "test-secret";
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final JwtTokenService jwtTokenService = new JwtTokenService(new JwtTool(objectMapper, SECRET, 600));
+    private final JwtTokenService jwtTokenService = new JwtTokenServiceImpl(new JwtTool(objectMapper, SECRET, 600));
 
     @Test
     void parsesUserIdFromBearerToken() throws Exception {

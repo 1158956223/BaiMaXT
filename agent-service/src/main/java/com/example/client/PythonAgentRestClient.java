@@ -1,7 +1,7 @@
 package com.example.client;
 
+import com.example.domain.dto.PythonAgentChatRequest;
 import com.example.domain.vo.AgentChatResponse;
-import com.example.service.PythonAgentChatRequest;
 import com.example.service.PythonAgentClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;

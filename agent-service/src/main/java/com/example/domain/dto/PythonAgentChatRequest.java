@@ -1,4 +1,4 @@
-package com.example.service;
+package com.example.domain.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 

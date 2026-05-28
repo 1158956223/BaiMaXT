@@ -1,7 +1,9 @@
 package com.example.service;
 
 import com.example.domain.dto.AgentChatRequest;
+import com.example.domain.dto.PythonAgentChatRequest;
 import com.example.domain.vo.AgentChatResponse;
+import com.example.service.impl.AgentChatServiceImpl;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -11,7 +13,7 @@ class AgentChatServiceTest {
 
     @Test
     void injectsUserIdFromJwtAndForwardsAuthorizationToPythonAgent() {
-        UserIdResolver userIdResolver = authorization -> 42L;
+        JwtTokenService jwtTokenService = authorization -> 42L;
         AtomicReference<String> forwardedAuthorization = new AtomicReference<>();
         AtomicReference<PythonAgentChatRequest> forwardedRequest = new AtomicReference<>();
         PythonAgentClient pythonAgentClient = (authorization, request) -> {
@@ -19,7 +21,7 @@ class AgentChatServiceTest {
             forwardedRequest.set(request);
             return new AgentChatResponse("已收到", 101L, 102L, null);
         };
-        AgentChatService service = new AgentChatService(userIdResolver, pythonAgentClient);
+        AgentChatService service = new AgentChatServiceImpl(jwtTokenService, pythonAgentClient);
 
         AgentChatResponse response = service.chat(
                 new AgentChatRequest("我要学 Java", "session-1", 101L, 102L, null, "确认报名"),
