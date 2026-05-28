@@ -10,15 +10,15 @@ import org.springframework.web.client.RestClient;
 @Component
 public class PythonAgentRestClient implements PythonAgentClient {
 
-    private final RestClient pythonAgentRestClient;
+    private final RestClient pythonAgentHttpClient;
 
-    public PythonAgentRestClient(RestClient pythonAgentRestClient) {
-        this.pythonAgentRestClient = pythonAgentRestClient;
+    public PythonAgentRestClient(RestClient pythonAgentHttpClient) {
+        this.pythonAgentHttpClient = pythonAgentHttpClient;
     }
 
     @Override
     public AgentChatResponse chat(String authorization, PythonAgentChatRequest request) {
-        return pythonAgentRestClient.post()
+        return pythonAgentHttpClient.post()
                 .uri("/api/agent/chat")
                 .header(HttpHeaders.AUTHORIZATION, authorization)
                 .body(request)

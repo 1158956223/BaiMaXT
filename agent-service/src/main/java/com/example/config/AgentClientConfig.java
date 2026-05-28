@@ -9,7 +9,7 @@ import org.springframework.web.client.RestClient;
 public class AgentClientConfig {
 
     @Bean
-    public RestClient pythonAgentRestClient(
+    public RestClient pythonAgentHttpClient(
             RestClient.Builder builder,
             @Value("${agent.python.base-url}") String pythonAgentBaseUrl
     ) {
