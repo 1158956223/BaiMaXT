@@ -17,3 +17,7 @@ spring:
     nacos:
       discovery:
         server-addr: localhost:8848
+
+auth:
+  jwt:
+    secret: BaiMaXT-auth-service-dev-secret-change-me-2026

@@ -40,3 +40,7 @@ mybatis-plus:
 baimaxt:
   upload:
     course-cover-dir: uploads/course-covers
+
+auth:
+  jwt:
+    secret: BaiMaXT-auth-service-dev-secret-change-me-2026

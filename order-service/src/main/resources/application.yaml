@@ -27,3 +27,7 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
+
+auth:
+  jwt:
+    secret: BaiMaXT-auth-service-dev-secret-change-me-2026
